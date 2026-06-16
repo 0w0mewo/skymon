@@ -11,7 +11,7 @@ pub struct Config {
     #[serde(rename(deserialize = "max_alt"), default = "Config::default_max_alt")]
     pub detection_altitude: f64,
 
-    #[serde(default = "Config::default_home")]
+    #[serde(rename(deserialize="home_coord"), default = "Config::default_home")]
     pub home: String,
 
     #[serde(
@@ -121,5 +121,26 @@ impl Config {
     #[inline]
     pub fn minimum_refresh_rate_ms() -> u64 {
         450
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{config::*, geo::GeoCoord};
+
+    #[test]
+    fn test_default_config() {
+        let conf = Config::new().unwrap();
+
+        assert_eq!(conf.db_path, Config::default_db_path());
+        assert_eq!(conf.detection_altitude, Config::default_max_alt());
+        assert_eq!(conf.detection_dist, Config::default_max_dist());
+        assert_eq!(conf.disp_all, Config::default_display_all_aircrafts());
+        assert_eq!(conf.flush_period_mins, Config::default_flush_period_mins());
+        assert_eq!(conf.disp_refresh_rate_ms, Config::minimum_refresh_rate_ms());
+        assert_eq!(conf.sbs1_server, Config::default_sbs1_server());
+        assert_eq!(conf.slient, Config::default_slient_mode());
+        assert_eq!(conf.home, Config::default_home());
+        assert!(conf.home.parse::<GeoCoord>().is_ok());
     }
 }
