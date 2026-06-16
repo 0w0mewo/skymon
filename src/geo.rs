@@ -289,22 +289,22 @@ impl std::fmt::Display for GeoCoord {
     }
 }
 
-impl TryFrom<&str> for GeoCoord {
-    type Error = crate::Error;
+impl std::str::FromStr for GeoCoord {
+    type Err = crate::Error;
 
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
         let mut splitted = value.split(",");
         if splitted.clone().count() != 2 {
-            return Err(Self::Error::ParseError);
+            return Err(Self::Err::ParseError);
         }
 
         let (lat, lon) = (splitted.next().unwrap(), splitted.next().unwrap());
         let Ok(lat) = lat.trim().parse::<f64>() else {
-            return Err(Self::Error::ParseError);
+            return Err(Self::Err::ParseError);
         };
 
         let Ok(lon) = lon.trim().parse::<f64>() else {
-            return Err(Self::Error::ParseError);
+            return Err(Self::Err::ParseError);
         };
 
         Ok(GeoCoord { lat, lon, alt: 0.0 })
@@ -335,13 +335,13 @@ mod test {
 
     #[test]
     fn test_geo_parsing() {
-        let should_parsed_coord: Result<GeoCoord, crate::Error> = "-0.8064, 0.0781".try_into();
+        let should_parsed_coord: Result<GeoCoord, crate::Error> = "-0.8064, 0.0781".parse();
         assert!(should_parsed_coord.is_ok_and(|x| { x.lat == -0.8064 && x.lon == 0.0781 }));
 
-        let incorrect_corrd: Result<GeoCoord, crate::Error> = "-, 2".try_into();
+        let incorrect_corrd: Result<GeoCoord, crate::Error> = "-, 2".parse();
         assert!(incorrect_corrd.is_err());
 
-        let incorrect_corrd: Result<GeoCoord, crate::Error> = "-, ".try_into();
+        let incorrect_corrd: Result<GeoCoord, crate::Error> = "-, ".parse();
         assert!(incorrect_corrd.is_err());
     }
 

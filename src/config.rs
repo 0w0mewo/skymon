@@ -22,7 +22,7 @@ impl Default for Config {
             sbs1_server: "127.0.0.1:30003".into(),
             detection_dist: 5000.0,
             detection_altitude: 2000.0,
-            home: "0.0,0.0".try_into().unwrap(),
+            home: "0.0,0.0".parse().unwrap(),
             db_path: ":memory:".into(),
             flsuh_period: time::Duration::minutes(5),
             slient: false,
@@ -44,8 +44,7 @@ impl Config {
             .context("missing detection altitude")?;
         let home = env::var("HOME")
             .context("missing home coordinate")?
-            .as_str()
-            .try_into()
+            .parse()
             .context("fail to parse home coordinate")?;
         let db_path = env::var("SQLITE_PATH").unwrap_or(":memory:".into());
         let flush_period_minutes = env::var("FLUSH_PERIOD")

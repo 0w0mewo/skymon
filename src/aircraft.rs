@@ -578,7 +578,7 @@ mod test {
 
     #[test]
     fn test_aircraft_dist_filter_abormal() {
-        let home: GeoCoord = "0.0, 0.0".try_into().unwrap();
+        let home: GeoCoord = "0.0, 0.0".parse().unwrap();
         let frames: Vec<Frame> = TEST_SBS1_FRAMES
             .iter()
             .map(|&x| Frame::parse(&x).unwrap())
@@ -598,7 +598,7 @@ mod test {
 
     #[test]
     fn test_aircraft_dist_filter() {
-        let home: GeoCoord = "51.455, -1.0281".try_into().unwrap();
+        let home: GeoCoord = "51.455, -1.0281".parse().unwrap();
         let frames: Vec<Frame> = TEST_SBS1_FRAMES
             .iter()
             .map(|&x| Frame::parse(&x).unwrap())
@@ -618,7 +618,7 @@ mod test {
 
     #[test]
     fn test_aircrafts_presist() {
-        let home: GeoCoord = "51.455, -1.0281".try_into().unwrap();
+        let home: GeoCoord = "51.455, -1.0281".parse().unwrap();
         let frames: Vec<Frame> = TEST_SBS1_FRAMES
             .iter()
             .map(|&x| Frame::parse(&x).unwrap())
@@ -662,7 +662,7 @@ mod test {
 
     #[test]
     fn test_table_print() {
-        let home: GeoCoord = "51.455, -1.0281".try_into().unwrap();
+        let home: GeoCoord = "51.455, -1.0281".parse().unwrap();
         let frames: Vec<Frame> = TEST_SBS1_FRAMES
             .iter()
             .map(|&x| Frame::parse(&x).unwrap())
