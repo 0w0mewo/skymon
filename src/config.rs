@@ -31,6 +31,9 @@ pub struct Config {
         default = "Config::default_display_all_aircrafts"
     )]
     pub disp_all: bool,
+
+    #[serde(default = "Config::minimum_refresh_rate_ms")]
+    pub disp_refresh_rate_ms: u64,
 }
 
 impl Default for Config {
@@ -44,6 +47,7 @@ impl Default for Config {
             flush_period_mins: Self::default_flush_period_mins(),
             slient: Self::default_slient_mode(),
             disp_all: Self::default_display_all_aircrafts(),
+            disp_refresh_rate_ms: Self::minimum_refresh_rate_ms(),
         }
     }
 }
@@ -112,5 +116,10 @@ impl Config {
     #[inline]
     fn default_sbs1_server() -> String {
         "127.0.0.1:30003".into()
+    }
+
+    #[inline]
+    pub fn minimum_refresh_rate_ms() -> u64 {
+        450
     }
 }

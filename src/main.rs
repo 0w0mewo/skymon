@@ -4,11 +4,11 @@ use crossbeam::channel::TryRecvError;
 use crossbeam::{atomic, channel, thread};
 use skymon::aircraft::{Aircraft, AircraftsBuilder};
 use skymon::config::Config;
-use skymon::utils::AircraftTableRow;
+use skymon::utils::{AircraftTableRow, sleep_ms};
 use skymon::{aircraft::Aircrafts, sbs1};
 use std::io::{self, Write};
 use std::sync::Arc;
-use std::{net, thread as std_thread, time as ttime};
+use std::{net, time as std_time};
 use time::UtcDateTime;
 
 fn main() -> Result<()> {
@@ -58,7 +58,7 @@ fn main() -> Result<()> {
             let flush_period = time::Duration::minutes(config.flush_period_mins as i64);
             let home_coord = config.home.parse().unwrap_or_default();
             let mut stdout = io::stdout();
-            let mut last_flush_time = ttime::Instant::now();
+            let mut last_flush_time = std_time::Instant::now();
 
             let mut aircrafts = AircraftsBuilder::new()
                 .home(&home_coord)
@@ -75,7 +75,7 @@ fn main() -> Result<()> {
 
                     // flush aircrafts state storage when idle
                     Err(TryRecvError::Empty) => {
-                        let now = ttime::Instant::now();
+                        let now = std_time::Instant::now();
                         if now - last_flush_time >= flush_period {
                             aircrafts.flush();
 
@@ -87,7 +87,7 @@ fn main() -> Result<()> {
                             last_flush_time = now;
                         }
 
-                        std_thread::sleep(ttime::Duration::from_millis(450));
+                        sleep_ms(450);
                     }
 
                     // channel closed, exit loop
@@ -118,7 +118,7 @@ fn main() -> Result<()> {
             let stop_signal = Arc::clone(&should_kill);
             let disp_handle = s.spawn(move |_| {
                 let mut stdout = io::stdout();
-                const DISP_REFRESH_MS: u64 = 450;
+                let disp_refresh_time_ms = config.disp_refresh_rate_ms.min(Config::minimum_refresh_rate_ms());
 
                 loop {
                     if stop_signal.load() {
@@ -141,7 +141,7 @@ fn main() -> Result<()> {
                     };
 
                     // throttling the refresh rate
-                    std_thread::sleep(ttime::Duration::from_millis(DISP_REFRESH_MS));
+                    sleep_ms(disp_refresh_time_ms);
                 }
             });
 
@@ -168,7 +168,7 @@ fn stdout_print_recored_aircrafts_recent(stdout: &mut io::Stdout, aircrafts: &Ai
     _ = stdout.write_all(format!("----{now}----\n",).as_bytes());
 
     let until_datetime = UtcDateTime::now();
-    let from_datetime = until_datetime - ttime::Duration::from_hours(6);
+    let from_datetime = until_datetime - time::Duration::hours(6);
 
     if let Ok(air_entries) = aircrafts.dump_seen_by_datetime(&from_datetime, &until_datetime) {
         let rows: Vec<AircraftTableRow> = air_entries.into_iter().map(|a| a.into()).collect();
