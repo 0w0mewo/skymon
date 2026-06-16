@@ -15,12 +15,11 @@ fn main() -> Result<()> {
     #[cfg(debug_assertions)]
     let config: Config = Config {
         sbs1_server: "192.168.20.18:30003".into(),
-        detection_dist: -1.0,
         ..Default::default()
     };
 
     #[cfg(not(debug_assertions))]
-    let config = Config::from_env()?;
+    let config = Config::new()?;
 
     let should_kill = Arc::new(atomic::AtomicCell::new(false));
 
@@ -56,11 +55,13 @@ fn main() -> Result<()> {
 
         // processing thread
         let aircrafts_proc_handle = s.spawn(move |_| {
+            let flush_period = time::Duration::minutes(config.flush_period_mins as i64);
+            let home_coord = config.home.parse().unwrap_or_default();
             let mut stdout = io::stdout();
             let mut last_flush_time = ttime::Instant::now();
 
             let mut aircrafts = AircraftsBuilder::new()
-                .home(&config.home)
+                .home(&home_coord)
                 .radius(config.detection_dist)
                 .persistence(&config.db_path)
                 .build();
@@ -75,7 +76,7 @@ fn main() -> Result<()> {
                     // flush aircrafts state storage when idle
                     Err(TryRecvError::Empty) => {
                         let now = ttime::Instant::now();
-                        if now - last_flush_time >= config.flsuh_period {
+                        if now - last_flush_time >= flush_period {
                             aircrafts.flush();
 
                             if config.slient {
@@ -102,7 +103,7 @@ fn main() -> Result<()> {
                     } else {
                         Box::new(aircrafts.iter_within_radius())
                     };
-                    
+
                     // we don't care about whether the current snapshot is passed to the display correctly,
                     // DON'T block here.
                     let current_snapshots_of_aircrafts: Vec<AircraftTableRow> =
