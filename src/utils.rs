@@ -1,16 +1,16 @@
+use crate::geo::GeoCoord;
 use cli_table::format::Justify;
 use time::UtcDateTime;
-use crate::geo::GeoCoord;
 
-pub fn table_f64_display(v: &f64) -> impl std::fmt::Display {
+fn table_f64_display(v: &f64) -> impl std::fmt::Display {
     format!("{:0<.2}", v)
 }
 
-pub fn table_u64_hex_display(v: &u64) -> impl std::fmt::Display {
+fn table_u64_hex_display(v: &u64) -> impl std::fmt::Display {
     format!("{:X}", v)
 }
 
-pub fn table_datetime_display(v: &UtcDateTime) -> impl std::fmt::Display {
+fn table_datetime_display(v: &UtcDateTime) -> impl std::fmt::Display {
     v.truncate_to_second()
 }
 
