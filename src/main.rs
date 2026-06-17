@@ -37,8 +37,12 @@ fn main() -> Result<()> {
         // sbs1 frame feeder thread
         let stop_signal = Arc::clone(&should_kill);
         let feeder_handle = s.spawn(move |_| {
+            let timeout = std_time::Duration::from_millis(500);
             let socket = net::TcpStream::connect(&config.sbs1_server)
                 .expect("fail to connect to SBS1 server");
+            _ = socket.set_nodelay(true);
+            _ = socket.set_read_timeout(Some(timeout));
+            
             let mut fetcher = sbs1::TcpFetcher::new(socket);
 
             println!("connected to SBS1 server: {}", config.sbs1_server);
