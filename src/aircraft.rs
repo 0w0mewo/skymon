@@ -93,59 +93,59 @@ impl Default for Aircraft {
     }
 }
 
-impl TryFrom<&Aircraft> for AircraftEntry {
+impl TryInto<AircraftEntry> for &Aircraft {
     type Error = crate::Error;
 
-    fn try_from(aircraft: &Aircraft) -> std::prelude::v1::Result<Self, Self::Error> {
-        let nearest_location = match aircraft.closest_location() {
+    fn try_into(self) -> std::prelude::v1::Result<AircraftEntry, Self::Error> {
+        let nearest_location = match self.closest_location() {
             Some(location) => location.clone(),
             None => return Err(crate::Error::InvalidInput),
         };
 
-        let nearest_dist = if aircraft.closest_dist().is_finite() {
-            aircraft.closest_dist()
+        let nearest_dist = if self.closest_dist().is_finite() {
+            self.closest_dist()
         } else {
             return Err(crate::Error::InvalidInput);
         };
 
-        let (hexident, callsign) = aircraft.identification();
+        let (hexident, callsign) = self.identification();
 
-        Ok(Self {
+        Ok(AircraftEntry {
             hexident,
             callsign,
-            closest_at: aircraft.closest_dist_datetime(),
+            closest_at: self.closest_dist_datetime(),
             closest_dist: nearest_dist,
             closest_location: nearest_location,
-            reg: aircraft.reg.clone(),
-            short_type: aircraft.short_type.clone(),
+            reg: self.reg.clone(),
+            short_type: self.short_type.clone(),
         })
     }
 }
 
-impl From<&Aircraft> for AircraftTableRow {
-    fn from(value: &Aircraft) -> Self {
-        Self {
-            hexident: value.hexident,
-            callsign: value.callsign.clone(),
-            position: value.position.clone(),
-            last_seen: value.last_seen,
-            dist: value.dist,
-            reg: value.reg.clone(),
-            short_type: value.short_type.clone(),
+impl Into<AircraftTableRow> for &Aircraft {
+    fn into(self) -> AircraftTableRow {
+        AircraftTableRow {
+            hexident: self.hexident,
+            callsign: self.callsign.clone(),
+            position: self.position.clone(),
+            last_seen: self.last_seen,
+            dist: self.dist,
+            reg: self.reg.clone(),
+            short_type: self.short_type.clone(),
         }
     }
 }
 
-impl From<Aircraft> for AircraftTableRow {
-    fn from(value: Aircraft) -> Self {
-        Self {
-            hexident: value.hexident,
-            callsign: value.callsign,
-            position: value.position,
-            last_seen: value.last_seen,
-            dist: value.dist,
-            reg: value.reg,
-            short_type: value.short_type,
+impl Into<AircraftTableRow> for Aircraft {
+    fn into(self) -> AircraftTableRow {
+        AircraftTableRow {
+            hexident: self.hexident,
+            callsign: self.callsign,
+            position: self.position,
+            last_seen: self.last_seen,
+            dist: self.dist,
+            reg: self.reg,
+            short_type: self.short_type,
         }
     }
 }
