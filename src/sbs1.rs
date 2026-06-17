@@ -1,3 +1,4 @@
+use anyhow::Result;
 use time::{Duration, PrimitiveDateTime, UtcOffset};
 use std::{
     io::{self, BufRead},
@@ -168,7 +169,7 @@ impl TcpFetcher {
     }
 
     /// read and parse one SBS1 frame
-    pub fn read_frame(&mut self) -> anyhow::Result<Frame> {
+    pub fn read_frame(&mut self) -> Result<Frame> {
         let mut line = String::new();
 
         // read and parse one line at a time
@@ -180,7 +181,7 @@ impl TcpFetcher {
                     return Err(Error::ConnectionClosed.into());
                 } else {
                     // reset by peer because there are still some bytes left without finish processing
-                    return Err(Error::ConnectionClosed.into());
+                    return Err(Error::ConnectionReset.into());
                 }
             }
             // socket is not closed
@@ -192,7 +193,7 @@ impl TcpFetcher {
 
         // try to parse frames
         match Frame::parse(&line) {
-            Ok(frame) => anyhow::Ok(frame),
+            Ok(frame) => Ok(frame),
             Err(e) => Err(e.into()),
         }
     }
@@ -207,12 +208,12 @@ fn parse_sbs1_datetime(date_str: &str, time_str: &str) -> Result<PrimitiveDateTi
     let datetime_str = format!("{} {}", date_str, time_str);
 
     PrimitiveDateTime::parse(&datetime_str, &dt_fmt)
-        .map(|x| {
+        .map(|datetime| {
             // correct to UTC time because SBS1 server is sending with local time
             let (off_h, off_m, off_s) = UtcOffset::current_local_offset()
                 .unwrap_or(UtcOffset::UTC)
                 .as_hms();
-            x - (Duration::hours(off_h as i64)
+            datetime - (Duration::hours(off_h as i64)
                 + Duration::minutes(off_m as i64)
                 + Duration::seconds(off_s as i64))
         })

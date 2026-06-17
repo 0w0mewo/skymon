@@ -13,6 +13,8 @@ pub enum Error {
     IncompleteFrame,
     #[error("connection closed")]
     ConnectionClosed,
+    #[error("connection reset")]
+    ConnectionReset,
     #[error("parse error")]
     ParseError,
     #[error("invalid input")]

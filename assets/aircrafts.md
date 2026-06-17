@@ -1,0 +1,1 @@
+aircrafts ICAO code, callsign/tailcode and type from here: https://github.com/wiedehopf/tar1090-db/raw/refs/heads/csv/aircraft.csv.gz

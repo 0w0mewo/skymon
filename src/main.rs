@@ -47,8 +47,16 @@ fn main() -> Result<()> {
                     break;
                 }
 
-                if let Ok(frame) = fetcher.read_frame() {
-                    _ = sbs1_frame_tx.send(frame);
+                match fetcher.read_frame() {
+                    Ok(frame) => {
+                        _ = sbs1_frame_tx.send(frame);
+                    }
+                    Err(e) => {
+                        eprintln!("fail to read SBS1 frame: {}, retrying", e);
+                        sleep_ms(100);
+
+                        continue;
+                    }
                 }
             }
         });
@@ -65,6 +73,12 @@ fn main() -> Result<()> {
                 .radius(config.detection_dist)
                 .persistence(&config.db_path)
                 .build();
+
+            if let Err(e) = aircrafts.import_aircrafts_metadata("assets/aircraft.csv.gz") {
+                eprintln!("fail to import aircrafts metadata: {}", e);
+            } else {
+                println!("aircrafts metadata imported");
+            }
 
             loop {
                 // update aircrafts state by frames from feeder
@@ -118,7 +132,9 @@ fn main() -> Result<()> {
             let stop_signal = Arc::clone(&should_kill);
             let disp_handle = s.spawn(move |_| {
                 let mut stdout = io::stdout();
-                let disp_refresh_time_ms = config.disp_refresh_rate_ms.min(Config::minimum_refresh_rate_ms());
+                let disp_refresh_time_ms = config
+                    .disp_refresh_rate_ms
+                    .min(Config::minimum_refresh_rate_ms());
 
                 loop {
                     if stop_signal.load() {

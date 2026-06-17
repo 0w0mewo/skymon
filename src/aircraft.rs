@@ -6,7 +6,8 @@ use time::{Duration, UtcDateTime};
 use crate::{
     db::{AircraftEntry, Database},
     geo::{CartesianCoord, GeoCoord},
-    sbs1, utils::AircraftTableRow,
+    sbs1,
+    utils::AircraftTableRow,
 };
 
 const ALT_RESOLUTION: f64 = 1.0; // altitude resoultion in feet
@@ -319,7 +320,7 @@ impl Aircrafts {
             a.update_closest(&self.home);
             a.update_distance(&self.home);
         };
-        
+
         if let Some(aircraft) = self.state.get_mut(&frame.hexident) {
             update_aircraft(aircraft);
         } else {
@@ -356,10 +357,25 @@ impl Aircrafts {
     /// dump all seen aircrafts between `start` and `end` datetime from database,
     /// the datetimes should be UTC
     pub fn dump_seen_by_datetime(
-        &self, start: &UtcDateTime, end: &UtcDateTime
+        &self,
+        start: &UtcDateTime,
+        end: &UtcDateTime,
     ) -> Result<Vec<AircraftEntry>> {
         if let Some(db) = self.persistence.as_ref() {
             db.get_records_by_datetime(start, end)
+        } else {
+            Err(anyhow!("database is not set"))
+        }
+    }
+
+    pub fn import_aircrafts_metadata(&mut self, csv_gz_path: &str) -> Result<()> {
+        if let Some(db) = self.persistence.as_mut() {
+            let count = db.metadata_count()?;
+            if count == 0 {
+                db.import_metadata_from_gzipped_csv(csv_gz_path, 10000)?;
+            }
+
+            Ok(())
         } else {
             Err(anyhow!("database is not set"))
         }
@@ -460,6 +476,7 @@ mod test {
     use cli_table::{WithTitle, print_stdout};
 
     use crate::aircraft::*;
+    use crate::db::AircraftMetadataEntry;
     use crate::sbs1::Frame;
 
     const TEST_SBS1_FRAMES: &[&str] = &[
@@ -658,6 +675,35 @@ mod test {
         );
 
         assert_eq!(aircrafts.iter().count(), 0);
+    }
+
+    #[test]
+    fn test_aircraft_metadata_import() {
+        let mut aircrafts = AircraftsBuilder::new().persistence(":memory:").build();
+
+        let db = aircrafts.persistence.as_mut().unwrap();
+        db.import_metadata_from_gzipped_csv("assets/aircraft.csv.gz", 10000)
+            .unwrap();
+
+        // 0x4CA2D6
+        let AircraftMetadataEntry {
+            reg,
+            short_type, ..
+        } = db.get_metadata_by_hexident(0x4CA2D6).unwrap_or_default();
+        assert_eq!(reg, "EI-DLJ");
+        assert_eq!(short_type, "B738");
+
+        // something else
+        let AircraftMetadataEntry {
+            reg,
+            short_type,
+            descr, ..
+        } = db.get_metadata_by_hexident(0x004013).unwrap_or_default();
+        assert_eq!(reg, "Z-FJF");
+        assert_eq!(short_type, "E145");
+        assert!(!descr.is_empty());
+
+        assert_eq!(db.metadata_count().unwrap_or_default(), 621159);
     }
 
     #[test]

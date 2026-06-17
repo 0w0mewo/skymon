@@ -75,7 +75,7 @@ sqlite DB path: {}"#,
 
 impl Config {
     pub fn new() -> Result<Self> {
-        envy::from_env().map_err(|e| e.into())
+        Ok(envy::from_env()?)
     }
 
     #[inline]

@@ -280,11 +280,10 @@ impl std::fmt::Display for GeoCoord {
         if !self.is_valid() {
             write!(f, "None")
         } else {
-            write!(
-                f,
-                "lat: {:0<.5}, lon: {:0<.5}, alt: {:0<.2}",
-                self.lat, self.lon, self.alt
-            )
+            match self.alt {
+                0.0 => write!(f, "lat: {:0<.5}, lon: {:0<.5}", self.lat, self.lon),
+                _ => write!(f, "lat: {:0<.5}, lon: {:0<.5}, alt: {:0<.2}", self.lat, self.lon, self.alt),
+            }
         }
     }
 }
