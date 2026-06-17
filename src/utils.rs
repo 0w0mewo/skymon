@@ -20,6 +20,10 @@ pub struct AircraftTableRow {
     pub hexident: u64,
     #[table(title = "Callsign")]
     pub callsign: String,
+    #[table(title = "Registration", justify = "Justify::Center")]
+    pub reg: String,
+    #[table(title = "Type")]
+    pub short_type: String,
     #[table(title = "Last position")]
     pub position: GeoCoord,
     #[table(
@@ -30,6 +34,20 @@ pub struct AircraftTableRow {
     pub dist: f64, // distance to the last reference location
     #[table(title = "Last update", display_fn = "table_datetime_display")]
     pub last_seen: UtcDateTime,
+}
+
+impl Default for AircraftTableRow {
+    fn default() -> Self {
+        Self {
+            last_seen: UtcDateTime::UNIX_EPOCH,
+            hexident: u64::MAX,
+            callsign: Default::default(),
+            reg: Default::default(),
+            short_type: Default::default(),
+            position: Default::default(),
+            dist: f64::INFINITY,
+        }
+    }
 }
 
 impl PartialOrd for AircraftTableRow {
@@ -51,7 +69,6 @@ impl PartialEq for AircraftTableRow {
 }
 
 impl Eq for AircraftTableRow {}
-
 
 pub fn sleep_ms(ms: u64) {
     std::thread::sleep(std::time::Duration::from_millis(ms));

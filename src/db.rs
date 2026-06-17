@@ -14,6 +14,8 @@ use crate::{geo::GeoCoord, utils::AircraftTableRow};
 pub struct AircraftEntry {
     pub hexident: u64,
     pub callsign: String,
+    pub reg: String,
+    pub short_type: String,
     pub closest_location: GeoCoord,
     pub closest_dist: f64,
     pub closest_at: UtcDateTime,
@@ -37,6 +39,8 @@ impl Default for AircraftEntry {
             closest_at: UtcDateTime::UNIX_EPOCH,
             closest_dist: f64::INFINITY,
             closest_location: Default::default(),
+            reg: Default::default(),
+            short_type: Default::default(),
         }
     }
 }
@@ -63,6 +67,8 @@ impl From<&AircraftEntry> for AircraftTableRow {
             position: value.closest_location.clone(),
             last_seen: value.closest_at,
             dist: value.closest_dist,
+            reg: value.reg.clone(),
+            short_type: value.short_type.clone(),
         }
     }
 }
@@ -75,6 +81,8 @@ impl From<AircraftEntry> for AircraftTableRow {
             position: value.closest_location,
             last_seen: value.closest_at,
             dist: value.closest_dist,
+            reg: value.reg,
+            short_type: value.short_type,
         }
     }
 }
@@ -153,21 +161,24 @@ impl Database {
         let conn = &self.conn;
 
         let mut stmt = conn.prepare_cached(
-            r#"SELECT callsign, last_update, closest_dist, closest_lat, closest_lon 
-            FROM aircrafts
-            WHERE hexident = :hexident;
+            r#"SELECT aircrafts.callsign, registry.reg, registry.type, last_update, closest_dist, closest_lat, closest_lon  
+            FROM aircrafts 
+            INNER JOIN registry ON aircrafts.hexident=registry.hexident
+            WHERE aircrafts.hexident = :hexident;
             "#,
         )?;
 
         let res: Vec<AircraftEntry> = stmt
             .query_map(named_params! {":hexident": hexident as i64}, |row| {
-                let (lat, lon) = (row.get(3)?, row.get(4)?);
+                let (lat, lon) = (row.get(5)?, row.get(6)?);
 
                 Ok(AircraftEntry {
                     hexident: hexident,
                     callsign: row.get(0)?,
-                    closest_at: row.get(1)?,
-                    closest_dist: row.get(2)?,
+                    reg: row.get(1)?,
+                    short_type: row.get(2)?,
+                    closest_at: row.get(3)?,
+                    closest_dist: row.get(4)?,
                     closest_location: GeoCoord::new(lat, lon),
                 })
             })?
@@ -209,8 +220,10 @@ impl Database {
         let conn = &self.conn;
 
         let mut stmt = conn.prepare_cached(
-            r#"SELECT hexident, callsign, last_update, closest_dist, closest_lat, closest_lon 
-            FROM aircrafts ORDER BY last_update DESC LIMIT :limit;
+            r#"SELECT aircrafts.hexident, aircrafts.callsign, registry.reg, registry.type, last_update, closest_dist, closest_lat, closest_lon  
+            FROM aircrafts 
+            INNER JOIN registry ON aircrafts.hexident=registry.hexident
+            ORDER BY last_update DESC LIMIT :limit;
             "#,
         )?;
 
@@ -246,8 +259,9 @@ impl Database {
         let conn = &self.conn;
 
         let mut stmt = conn.prepare_cached(
-            r#"SELECT hexident, callsign, last_update, closest_dist, closest_lat, closest_lon 
+            r#"SELECT aircrafts.hexident, aircrafts.callsign, registry.reg, registry.type, last_update, closest_dist, closest_lat, closest_lon  
             FROM aircrafts 
+            INNER JOIN registry ON aircrafts.hexident=registry.hexident 
             WHERE last_update BETWEEN :start AND :end 
             ORDER BY last_update DESC;
             "#,
@@ -255,14 +269,16 @@ impl Database {
 
         let res: Vec<AircraftEntry> = stmt
             .query_map(named_params! {":start": start, ":end": end}, |row| {
-                let (lat, lon) = (row.get(4)?, row.get(5)?);
+                let (lat, lon) = (row.get(6)?, row.get(7)?);
                 let hexident: i64 = row.get(0)?;
 
                 Ok(AircraftEntry {
                     hexident: hexident as u64,
                     callsign: row.get(1)?,
-                    closest_at: row.get(2)?,
-                    closest_dist: row.get(3)?,
+                    reg: row.get(2)?,
+                    short_type: row.get(3)?,
+                    closest_at: row.get(4)?,
+                    closest_dist: row.get(5)?,
                     closest_location: GeoCoord::new(lat, lon),
                 })
             })?
@@ -333,7 +349,8 @@ impl Database {
 
             for row in rows {
                 let mut splited = row.split(';');
-                let (mut hexid, mut reg, mut _type, mut descr, mut year, mut owner) = (0u64, "UNKNOWN", "UNKNOWN", "", 0, "");
+                let (mut hexid, mut reg, mut _type, mut descr, mut year, mut owner) =
+                    (0u64, "UNKNOWN", "UNKNOWN", "", 0, "");
 
                 if let Some(hexident) = splited.next() {
                     hexid = u64::from_str_radix(hexident, 16).unwrap_or_default();

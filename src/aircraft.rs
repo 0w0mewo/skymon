@@ -13,6 +13,7 @@ use crate::{
 const ALT_RESOLUTION: f64 = 1.0; // altitude resoultion in feet
 const VRATE_RESOLUTION: f64 = 1.0; // vertical rate resolution in feet
 const FEET_PER_METER: f64 = 0.3048;
+const UNKNOWN_AIRCRAFT_STR: &str = "Unknown";
 
 #[derive(Debug, Clone)]
 pub struct Aircraft {
@@ -23,6 +24,8 @@ pub struct Aircraft {
     ground_speed: f64,
     vertical_rate: f64,
     last_seen: UtcDateTime,
+    reg: String,
+    short_type: String,
     dist: f64,                  // distance to the last reference location
     closest_dist: f64,          // closest detected distance to the last reference location
     closest_position: GeoCoord, // closest detected position to the last reference location
@@ -56,9 +59,11 @@ impl std::fmt::Display for Aircraft {
 
         write!(
             f,
-            "callsign: {:>11} ({:X}), speed: {:0<.2} km/h, climb rate: {:0<.2} m/s, location: [{}], track: {:0<.2}, last seen: {}",
+            "callsign: {:>11} ({:X}) reg: {} type: {}, speed: {:0<.2} km/h, climb rate: {:0<.2} m/s, location: [{}], track: {:0<.2}, last seen: {}",
             callsign,
             hexident,
+            self.reg,
+            self.short_type,
             self.ground_speed,
             self.vertical_rate,
             location,
@@ -82,6 +87,8 @@ impl Default for Aircraft {
             closest_at: UtcDateTime::UNIX_EPOCH,
             dist: f64::INFINITY,
             track: f64::INFINITY,
+            reg: UNKNOWN_AIRCRAFT_STR.into(),
+            short_type: UNKNOWN_AIRCRAFT_STR.into(),
         }
     }
 }
@@ -109,6 +116,8 @@ impl TryFrom<&Aircraft> for AircraftEntry {
             closest_at: aircraft.closest_dist_datetime(),
             closest_dist: nearest_dist,
             closest_location: nearest_location,
+            reg: aircraft.reg.clone(),
+            short_type: aircraft.short_type.clone(),
         })
     }
 }
@@ -121,6 +130,8 @@ impl From<&Aircraft> for AircraftTableRow {
             position: value.position.clone(),
             last_seen: value.last_seen,
             dist: value.dist,
+            reg: value.reg.clone(),
+            short_type: value.short_type.clone(),
         }
     }
 }
@@ -133,6 +144,8 @@ impl From<Aircraft> for AircraftTableRow {
             position: value.position,
             last_seen: value.last_seen,
             dist: value.dist,
+            reg: value.reg,
+            short_type: value.short_type,
         }
     }
 }
@@ -319,6 +332,17 @@ impl Aircrafts {
             a.update(&frame);
             a.update_closest(&self.home);
             a.update_distance(&self.home);
+
+            // update aircraft registration and type only when it is empty
+            // it should fetch and update once from the database record
+            if a.reg == UNKNOWN_AIRCRAFT_STR || a.short_type == UNKNOWN_AIRCRAFT_STR {
+                if let Some(db) = self.persistence.as_ref() {
+                    if let Ok(metadata) = db.get_metadata_by_hexident(a.hexident) {
+                        a.reg = metadata.reg;
+                        a.short_type = metadata.short_type;
+                    }
+                }
+            }
         };
 
         if let Some(aircraft) = self.state.get_mut(&frame.hexident) {
@@ -652,9 +676,11 @@ mod test {
 
         aircrafts.flush();
 
-        let db = aircrafts.persistence.as_ref().unwrap();
+        let db = aircrafts.persistence.as_mut().unwrap();
+        db.import_metadata_from_gzipped_csv("assets/aircraft.csv.gz", 10000)
+            .unwrap();
 
-        let air1 = db.get_records_by_hexident(0x4CA2D6).unwrap_or_default();
+        let air1 = db.get_records_by_hexident(0x4CA2D6).unwrap();
         assert!(!air1.is_empty() && air1.len() == 1);
         assert!(air1[0].callsign == "TEST123");
         assert!(air1[0].closest_at != UtcDateTime::UNIX_EPOCH);
@@ -667,12 +693,12 @@ mod test {
 
         let test_datetime = UtcDateTime::from_unix_timestamp(1213551070).unwrap();
         let test_datetime_end = UtcDateTime::from_unix_timestamp(1229362270).unwrap();
-        assert_eq!(
-            db.get_records_by_datetime(&test_datetime, &test_datetime_end)
-                .unwrap()
-                .len(),
-            1
-        );
+        let res = db
+            .get_records_by_datetime(&test_datetime, &test_datetime_end)
+            .unwrap();
+        assert_eq!(res.len(), 1);
+        assert!(!res[0].reg.is_empty());
+        assert!(!res[0].short_type.is_empty());
 
         assert_eq!(aircrafts.iter().count(), 0);
     }
@@ -687,8 +713,7 @@ mod test {
 
         // 0x4CA2D6
         let AircraftMetadataEntry {
-            reg,
-            short_type, ..
+            reg, short_type, ..
         } = db.get_metadata_by_hexident(0x4CA2D6).unwrap_or_default();
         assert_eq!(reg, "EI-DLJ");
         assert_eq!(short_type, "B738");
@@ -697,7 +722,8 @@ mod test {
         let AircraftMetadataEntry {
             reg,
             short_type,
-            descr, ..
+            descr,
+            ..
         } = db.get_metadata_by_hexident(0x004013).unwrap_or_default();
         assert_eq!(reg, "Z-FJF");
         assert_eq!(short_type, "E145");
@@ -713,7 +739,15 @@ mod test {
             .iter()
             .map(|&x| Frame::parse(&x).unwrap())
             .collect();
-        let mut aircrafts = AircraftsBuilder::new().home(&home).radius(10_000.0).build();
+        let mut aircrafts = AircraftsBuilder::new()
+            .home(&home)
+            .radius(10_000.0)
+            .persistence(":memory:")
+            .build();
+
+        aircrafts
+            .import_aircrafts_metadata("assets/aircraft.csv.gz")
+            .unwrap();
 
         for frame in &frames {
             aircrafts.feed(frame);
