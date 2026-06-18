@@ -4,8 +4,9 @@ use crossbeam::channel::TryRecvError;
 use crossbeam::{atomic, channel, thread};
 use skymon::aircraft::{Aircraft, AircraftsBuilder};
 use skymon::config::Config;
-use skymon::utils::{AircraftTableRow, sleep_ms};
-use skymon::{aircraft::Aircrafts, sbs1};
+use skymon::database::models::AircraftTableRow;
+use skymon::utils::sleep_ms;
+use skymon::{aircraft::Aircrafts, feeders::sbs1};
 use std::io::{self, Write};
 use std::sync::Arc;
 use std::{net, time as std_time};
@@ -77,7 +78,7 @@ fn main() -> Result<()> {
             if let Err(e) = aircrafts.import_aircrafts_metadata("assets/aircraft.csv.gz") {
                 eprintln!("fail to import aircrafts metadata: {}", e);
                 stop_signal.store(true);
-                return ;
+                return;
             } else {
                 println!("aircrafts metadata imported");
             }

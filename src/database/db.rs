@@ -8,94 +8,10 @@ use flate2::read::GzDecoder;
 use rusqlite::{self as rqlite, named_params};
 use time::UtcDateTime;
 
-use crate::{geo::GeoCoord, utils::AircraftTableRow};
-
-#[derive(Debug, Clone)]
-pub struct AircraftEntry {
-    pub hexident: u64,
-    pub callsign: String,
-    pub reg: String,
-    pub short_type: String,
-    pub closest_location: GeoCoord,
-    pub closest_dist: f64,
-    pub closest_at: UtcDateTime,
-}
-
-impl AircraftEntry {
-    fn is_valid(&self) -> bool {
-        self.hexident != 0
-            && (!self.callsign.is_empty())
-            && self.closest_at != UtcDateTime::UNIX_EPOCH
-            && self.closest_dist.is_finite()
-            && self.closest_location.is_valid()
-    }
-}
-
-impl Default for AircraftEntry {
-    fn default() -> Self {
-        Self {
-            hexident: Default::default(),
-            callsign: Default::default(),
-            closest_at: UtcDateTime::UNIX_EPOCH,
-            closest_dist: f64::INFINITY,
-            closest_location: Default::default(),
-            reg: Default::default(),
-            short_type: Default::default(),
-        }
-    }
-}
-
-impl std::fmt::Display for AircraftEntry {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{} ({:x}) [{}] dist: {:.3}, recorded at: {}",
-            self.callsign,
-            self.hexident,
-            self.closest_location,
-            self.closest_dist,
-            self.closest_at.truncate_to_second()
-        )
-    }
-}
-
-impl Into<AircraftTableRow> for &AircraftEntry {
-    fn into(self) -> AircraftTableRow {
-        AircraftTableRow {
-            hexident: self.hexident,
-            callsign: self.callsign.clone(),
-            position: self.closest_location.clone(),
-            last_seen: self.closest_at,
-            dist: self.closest_dist,
-            reg: self.reg.clone(),
-            short_type: self.short_type.clone(),
-        }
-    }
-}
-
-impl Into<AircraftTableRow> for AircraftEntry {
-    fn into(self) -> AircraftTableRow {
-        AircraftTableRow {
-            hexident: self.hexident,
-            callsign: self.callsign,
-            position: self.closest_location,
-            last_seen: self.closest_at,
-            dist: self.closest_dist,
-            reg: self.reg,
-            short_type: self.short_type,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct AircraftMetadataEntry {
-    pub hexident: u64,
-    pub reg: String,
-    pub short_type: String,
-    pub descr: String,
-    pub year: u16,
-    pub owner: String,
-}
+use crate::{
+    database::models::{AircraftEntry, AircraftMetadataEntry},
+    utils::geo::GeoCoord,
+};
 
 pub struct Database {
     conn: rqlite::Connection,
@@ -329,7 +245,9 @@ impl Database {
         )?;
 
         // we don't care about Err(QueryReturnedNoRows), it just mean there is not thing imported to the `registry` table
-        let res = stmt.query_one([], |row| Ok(row.get(0)?)).unwrap_or_default();
+        let res = stmt
+            .query_one([], |row| Ok(row.get(0)?))
+            .unwrap_or_default();
 
         Ok(res)
     }

@@ -11,7 +11,7 @@ pub struct Config {
     #[serde(rename(deserialize = "max_alt"), default = "Config::default_max_alt")]
     pub detection_altitude: f64,
 
-    #[serde(rename(deserialize="home_coord"), default = "Config::default_home")]
+    #[serde(rename(deserialize = "home_coord"), default = "Config::default_home")]
     pub home: String,
 
     #[serde(
@@ -126,7 +126,7 @@ impl Config {
 
 #[cfg(test)]
 mod test {
-    use crate::{config::*, geo::GeoCoord};
+    use crate::{config::*, utils::geo::GeoCoord};
 
     #[test]
     fn test_default_config() {

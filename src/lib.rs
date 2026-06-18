@@ -1,8 +1,7 @@
 pub mod aircraft;
+pub mod feeders;
 pub mod config;
-pub mod db;
-pub mod geo;
-pub mod sbs1;
+pub mod database;
 pub mod utils;
 
 #[derive(Debug, thiserror::Error)]

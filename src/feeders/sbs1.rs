@@ -1,9 +1,9 @@
 use anyhow::Result;
-use time::{Duration, PrimitiveDateTime, UtcOffset};
 use std::{
     io::{self, BufRead},
     net,
 };
+use time::{Duration, PrimitiveDateTime, UtcOffset};
 
 use crate::Error;
 
@@ -213,16 +213,17 @@ fn parse_sbs1_datetime(date_str: &str, time_str: &str) -> Result<PrimitiveDateTi
             let (off_h, off_m, off_s) = UtcOffset::current_local_offset()
                 .unwrap_or(UtcOffset::UTC)
                 .as_hms();
-            datetime - (Duration::hours(off_h as i64)
-                + Duration::minutes(off_m as i64)
-                + Duration::seconds(off_s as i64))
+            datetime
+                - (Duration::hours(off_h as i64)
+                    + Duration::minutes(off_m as i64)
+                    + Duration::seconds(off_s as i64))
         })
         .map_err(|_| Error::ParseError)
 }
 
 #[cfg(test)]
 mod test {
-    use crate::sbs1::*;
+    use crate::feeders::sbs1::*;
 
     const TEST_SBS1_FRAMES: &[&str] = &[
         "MSG,4,5,211,4CA2D6,10057,2008/11/28,14:53:49.986,2008/11/28,14:58:51.153,,,408.3,146.4,,,64,,,,,\r\n",

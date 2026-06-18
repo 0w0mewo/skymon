@@ -4,10 +4,13 @@ use std::{collections::HashMap, fs};
 use time::{Duration, UtcDateTime};
 
 use crate::{
-    db::{AircraftEntry, Database},
-    geo::{CartesianCoord, GeoCoord},
-    sbs1,
-    utils::{AircraftTableRow, sha256_digest},
+    feeders::sbs1,
+    database::{
+        db::Database,
+        models::{AircraftEntry, AircraftTableRow},
+    },
+    utils::geo::{CartesianCoord, GeoCoord},
+    utils::sha256_digest,
 };
 
 const ALT_RESOLUTION: f64 = 1.0; // altitude resoultion in feet
@@ -505,8 +508,8 @@ mod test {
     use cli_table::{WithTitle, print_stdout};
 
     use crate::aircraft::*;
-    use crate::db::AircraftMetadataEntry;
-    use crate::sbs1::Frame;
+    use crate::feeders::sbs1::Frame;
+    use crate::database::models::AircraftMetadataEntry;
 
     const TEST_SBS1_FRAMES: &[&str] = &[
         "MSG,4,5,211,4CA2D6,10057,2008/11/28,14:53:49.986,2008/11/28,14:58:51.153,,,408.3,146.4,,,64,,,,,\r\n",

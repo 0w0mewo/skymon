@@ -282,7 +282,11 @@ impl std::fmt::Display for GeoCoord {
         } else {
             match self.alt {
                 0.0 => write!(f, "lat: {:0<.5}, lon: {:0<.5}", self.lat, self.lon),
-                _ => write!(f, "lat: {:0<.5}, lon: {:0<.5}, alt: {:0<.2}", self.lat, self.lon, self.alt),
+                _ => write!(
+                    f,
+                    "lat: {:0<.5}, lon: {:0<.5}, alt: {:0<.2}",
+                    self.lat, self.lon, self.alt
+                ),
             }
         }
     }
@@ -312,12 +316,12 @@ impl std::str::FromStr for GeoCoord {
 
 #[cfg(test)]
 mod test {
-    use crate::geo::{self, GeoCoord};
+    use crate::utils::geo::{self, GeoCoord};
 
     #[test]
     fn test_geo() {
-        let cur = geo::GeoCoord::new_with_altitude(-33.723, 150.882, 3560.0);
-        let home = geo::GeoCoord::new(-33.8064, 151.0781);
+        let cur = GeoCoord::new_with_altitude(-33.723, 150.882, 3560.0);
+        let home = GeoCoord::new(-33.8064, 151.0781);
 
         let dist = &cur - &home;
         assert!(dist - 20361.76 < 0.01);
