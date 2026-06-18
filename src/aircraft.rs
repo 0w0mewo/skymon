@@ -25,7 +25,7 @@ const UNKNOWN_AIRCRAFT_STR: &str = "Unknown";
 pub struct Aircraft {
     hexident: u64,
     callsign: String,
-    position: GeoCoord, // last position
+    position: GeoCoord,                // last position
     trace: Option<BTreeSet<GeoCoord>>, // trace of positions
     track: f64,
     ground_speed: f64,
@@ -177,7 +177,7 @@ impl Aircraft {
     }
 
     /// update current states from SBS1 frame, ignored if hexidents are different
-    fn update(&mut self, sbs_frame: &sbs1::Frame) {
+    fn update(&mut self, sbs_frame: &sbs1::Frame, observer_position: &GeoCoord) {
         if sbs_frame.hexident != self.hexident {
             return;
         }
@@ -219,12 +219,27 @@ impl Aircraft {
             self.track = track_angle;
         }
 
+        // current distance to observer
+        self.dist = self.distance(observer_position);
+        
+        // update closest position to observer
+        if let Some(plane_loc) = self.get_position() {
+            let dist = plane_loc - observer_position;
+
+            if dist < self.closest_dist {
+                self.closest_position = plane_loc.clone();
+                self.closest_at = self.last_seen;
+
+                self.closest_dist = dist;
+            }
+        }
+
         // insert current position if it's valid
         self.trace.as_mut().and_then(|t| {
             if !self.position.is_valid() {
                 return None;
             }
-            
+
             Some(t.insert(self.position.clone()))
         });
     }
@@ -276,25 +291,6 @@ impl Aircraft {
     /// climb rate in m/s
     pub fn vertical_rate(&self) -> f64 {
         self.vertical_rate
-    }
-
-    /// set distance to the reference point
-    fn update_distance(&mut self, reference_location: &GeoCoord) {
-        self.dist = self.distance(reference_location);
-    }
-
-    /// update closest distance and geolocation of the aircraft to `reference_location`
-    fn update_closest(&mut self, reference_location: &GeoCoord) {
-        if let Some(plane_loc) = self.get_position() {
-            let dist = plane_loc - reference_location;
-
-            if dist < self.closest_dist {
-                self.closest_position = plane_loc.clone();
-                self.closest_at = self.last_seen;
-
-                self.closest_dist = dist;
-            }
-        }
     }
 
     /// datetime of last seen
@@ -371,9 +367,7 @@ impl Aircrafts {
         );
 
         // in-place update the state of the aircraft
-        a.update(&frame);
-        a.update_closest(&self.home);
-        a.update_distance(&self.home);
+        a.update(&frame, &self.home);
 
         // update aircraft registration and type only when it is empty
         // it should fetch and update once from the database record
@@ -569,6 +563,7 @@ mod test {
     fn test_aircraft() {
         let mut air1 = Aircraft::new().with_hexident(0x4CA2D6);
         let mut air2 = Aircraft::new().with_hexident(0x4010E9);
+        let home: GeoCoord = "0.0, 0.0".parse().unwrap();
 
         let frames: Vec<Frame> = TEST_SBS1_FRAMES
             .iter()
@@ -576,8 +571,8 @@ mod test {
             .collect();
 
         for frame in &frames {
-            air1.update(&frame);
-            air2.update(&frame);
+            air1.update(&frame, &home);
+            air2.update(&frame, &home);
         }
 
         assert!(air1.get_trace().is_none());
