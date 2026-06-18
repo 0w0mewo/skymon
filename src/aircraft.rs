@@ -328,30 +328,26 @@ impl Aircrafts {
 
     /// update/insert an aircraft from SBS1 frame
     pub fn feed(&mut self, frame: &sbs1::Frame) {
-        let update_aircraft = |a: &mut Aircraft| {
-            a.update(&frame);
-            a.update_closest(&self.home);
-            a.update_distance(&self.home);
+        // it gives a mutable reference to aircraft, or insert and return a new aircraft reference if it hasn't seen yet
+        let a = self
+            .state
+            .entry(frame.hexident)
+            .or_insert(Aircraft::new().with_hexident(frame.hexident));
 
-            // update aircraft registration and type only when it is empty
-            // it should fetch and update once from the database record
-            if a.reg == UNKNOWN_AIRCRAFT_STR || a.short_type == UNKNOWN_AIRCRAFT_STR {
-                if let Some(db) = self.persistence.as_ref() {
-                    if let Ok(metadata) = db.get_metadata_by_hexident(a.hexident) {
-                        a.reg = metadata.reg;
-                        a.short_type = metadata.short_type;
-                    }
+        // in-place update the state of the aircraft
+        a.update(&frame);
+        a.update_closest(&self.home);
+        a.update_distance(&self.home);
+
+        // update aircraft registration and type only when it is empty
+        // it should fetch and update once from the database record
+        if a.reg == UNKNOWN_AIRCRAFT_STR || a.short_type == UNKNOWN_AIRCRAFT_STR {
+            if let Some(db) = self.persistence.as_ref() {
+                if let Ok(metadata) = db.get_metadata_by_hexident(a.hexident) {
+                    a.reg = metadata.reg;
+                    a.short_type = metadata.short_type;
                 }
             }
-        };
-
-        if let Some(aircraft) = self.state.get_mut(&frame.hexident) {
-            update_aircraft(aircraft);
-        } else {
-            let mut aircraft = Aircraft::new().with_hexident(frame.hexident);
-            update_aircraft(&mut aircraft);
-
-            self.state.insert(frame.hexident, aircraft);
         }
     }
 
