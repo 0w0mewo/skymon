@@ -39,26 +39,6 @@ pub struct Aircraft {
     closest_at: UtcDateTime,
 }
 
-impl PartialEq for Aircraft {
-    fn eq(&self, other: &Self) -> bool {
-        self.hexident == other.hexident
-    }
-}
-
-impl PartialOrd for Aircraft {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for Aircraft {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.last_seen.cmp(&other.last_seen).reverse() // latest first
-    }
-}
-
-impl Eq for Aircraft {}
-
 impl std::fmt::Display for Aircraft {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let (hexident, callsign) = self.identification();
@@ -637,7 +617,7 @@ mod test {
 
         // getting aircraft that haven't seen
         let air_not_seen_yet = aircrafts.get(0xaabb);
-        assert_eq!(air_not_seen_yet, None);
+        assert!(air_not_seen_yet.is_none());
 
         aircrafts.flush();
         assert_eq!(aircrafts.iter().count(), 0);
@@ -659,11 +639,6 @@ mod test {
         // iter() method
         assert_eq!(aircrafts.iter().count(), 4);
         assert!(aircrafts.iter().any(|a| { a.get_position().is_some() }));
-
-        //sort
-        let mut airs: Vec<&Aircraft> = aircrafts.iter().collect();
-        airs.sort();
-        assert!(airs.is_sorted());
     }
 
     #[test]
