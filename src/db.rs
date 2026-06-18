@@ -151,7 +151,11 @@ impl Database {
         "owner" TEXT,
         PRIMARY KEY("hexident")
     );
-        "#,
+
+    CREATE TABLE IF NOT EXISTS "registry_version" (
+        "hash" VARCHAR(64) NOT NULL UNIQUE
+    );
+    "#,
         )?;
 
         Ok(())
@@ -316,22 +320,30 @@ impl Database {
         Ok(())
     }
 
-    pub fn metadata_count(&self) -> Result<usize> {
+    pub(crate) fn get_registry_version(&self) -> Result<String> {
         let conn = &self.conn;
-
         let mut stmt = conn.prepare_cached(
-            r#"SELECT count(hexident) 
-            FROM registry;
+            r#"SELECT hash
+            FROM registry_version;
             "#,
         )?;
 
-        let res = stmt.query_one([], |row| {
-            let count: isize = row.get(0)?;
+        // we don't care about Err(QueryReturnedNoRows), it just mean there is not thing imported to the `registry` table
+        let res = stmt.query_one([], |row| Ok(row.get(0)?)).unwrap_or_default();
 
-            Ok(count)
-        })?;
+        Ok(res)
+    }
 
-        Ok(res as usize)
+    pub(crate) fn insert_registry_version(&self, hash: &str) -> Result<()> {
+        self.conn.execute(
+            r#"INSERT INTO registry_version (hash) 
+                VALUES (:hash) ON CONFLICT(hash) 
+                DO UPDATE SET
+                    hash = excluded.hash;"#,
+            named_params! {":hash": hash},
+        )?;
+
+        Ok(())
     }
 
     pub fn import_metadata_from_gzipped_csv(

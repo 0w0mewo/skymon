@@ -1,13 +1,13 @@
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 
-use std::collections::HashMap;
+use std::{collections::HashMap, fs};
 use time::{Duration, UtcDateTime};
 
 use crate::{
     db::{AircraftEntry, Database},
     geo::{CartesianCoord, GeoCoord},
     sbs1,
-    utils::AircraftTableRow,
+    utils::{AircraftTableRow, sha256_digest},
 };
 
 const ALT_RESOLUTION: f64 = 1.0; // altitude resoultion in feet
@@ -394,10 +394,19 @@ impl Aircrafts {
 
     pub fn import_aircrafts_metadata(&mut self, csv_gz_path: &str) -> Result<()> {
         if let Some(db) = self.persistence.as_mut() {
-            let count = db.metadata_count()?;
-            if count == 0 {
-                db.import_metadata_from_gzipped_csv(csv_gz_path, 10000)?;
+            let hash = {
+                let agz_file =
+                    fs::File::open(csv_gz_path).context("fail to open aircrafts gzipped csv")?;
+                sha256_digest(agz_file).context("sha256 hasher")?
+            }; // make sure the file is opened as short as possible
+
+            let old_hash = db.get_registry_version()?;
+            if hash == old_hash {
+                return Ok(());
             }
+
+            db.import_metadata_from_gzipped_csv(csv_gz_path, 10000)?;
+            db.insert_registry_version(&hash)?;
 
             Ok(())
         } else {
@@ -728,8 +737,6 @@ mod test {
         assert_eq!(reg, "Z-FJF");
         assert_eq!(short_type, "E145");
         assert!(!descr.is_empty());
-
-        assert_eq!(db.metadata_count().unwrap_or_default(), 621159);
     }
 
     #[test]
