@@ -25,18 +25,16 @@ impl TryFrom<&str> for MsgType {
     type Error = Error;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        let a: u8 = value.parse().map_err(|_| Error::ParseError)?;
-
-        match a {
-            0 => Ok(Self::Unknown),
-            1 => Ok(Self::EsIdentAndCategory),
-            2 => Ok(Self::EsSurfacePos),
-            3 => Ok(Self::EsAirbornePos),
-            4 => Ok(Self::EsAirborneVel),
-            5 => Ok(Self::SurveillanceAlt),
-            6 => Ok(Self::SurveillanceId),
-            7 => Ok(Self::AirToAir),
-            8 => Ok(Self::AllCallReply),
+        match value {
+            "0" => Ok(Self::Unknown),
+            "1" => Ok(Self::EsIdentAndCategory),
+            "2" => Ok(Self::EsSurfacePos),
+            "3" => Ok(Self::EsAirbornePos),
+            "4" => Ok(Self::EsAirborneVel),
+            "5" => Ok(Self::SurveillanceAlt),
+            "6" => Ok(Self::SurveillanceId),
+            "7" => Ok(Self::AirToAir),
+            "8" => Ok(Self::AllCallReply),
             _ => Err(Error::ParseError),
         }
     }
