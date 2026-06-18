@@ -73,6 +73,7 @@ fn main() -> Result<()> {
                 .home(&home_coord)
                 .radius(config.detection_dist)
                 .persistence(&config.db_path)
+                .record_positions(config.enable_position_recording)
                 .build();
 
             if let Err(e) = aircrafts.import_aircrafts_metadata("assets/aircraft.csv.gz") {

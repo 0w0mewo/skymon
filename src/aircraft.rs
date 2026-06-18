@@ -1,14 +1,17 @@
 use anyhow::{Context, Result, anyhow};
 
-use std::{collections::HashMap, fs};
+use std::{
+    collections::{BTreeSet, HashMap},
+    fs,
+};
 use time::{Duration, UtcDateTime};
 
 use crate::{
-    feeders::sbs1,
     database::{
         db::Database,
         models::{AircraftEntry, AircraftTableRow},
     },
+    feeders::sbs1,
     utils::geo::{CartesianCoord, GeoCoord},
     utils::sha256_digest,
 };
@@ -22,7 +25,8 @@ const UNKNOWN_AIRCRAFT_STR: &str = "Unknown";
 pub struct Aircraft {
     hexident: u64,
     callsign: String,
-    position: GeoCoord,
+    position: GeoCoord, // last position
+    trace: Option<BTreeSet<GeoCoord>>, // trace of positions
     track: f64,
     ground_speed: f64,
     vertical_rate: f64,
@@ -92,6 +96,7 @@ impl Default for Aircraft {
             track: f64::INFINITY,
             reg: UNKNOWN_AIRCRAFT_STR.into(),
             short_type: UNKNOWN_AIRCRAFT_STR.into(),
+            trace: None,
         }
     }
 }
@@ -163,6 +168,14 @@ impl Aircraft {
         self
     }
 
+    pub fn with_traces(mut self, enable: bool) -> Self {
+        if enable {
+            self.trace = Some(BTreeSet::new());
+        }
+
+        self
+    }
+
     /// update current states from SBS1 frame, ignored if hexidents are different
     fn update(&mut self, sbs_frame: &sbs1::Frame) {
         if sbs_frame.hexident != self.hexident {
@@ -205,6 +218,15 @@ impl Aircraft {
         if let Some(track_angle) = sbs_frame.track {
             self.track = track_angle;
         }
+
+        // insert current position if it's valid
+        self.trace.as_mut().and_then(|t| {
+            if !self.position.is_valid() {
+                return None;
+            }
+            
+            Some(t.insert(self.position.clone()))
+        });
     }
 
     /// get latitude, longtitude and altitude(in meters) of the aircraft
@@ -214,6 +236,14 @@ impl Aircraft {
         } else {
             None
         }
+    }
+
+    /// get trace of positions, return `None` if positions recording is disabled,
+    /// set `with_traces()` with `true` to enable positions recording
+    pub fn get_trace(&self) -> Option<Vec<&GeoCoord>> {
+        self.trace
+            .as_ref()
+            .and_then(|trace| Some(trace.iter().collect()))
     }
 
     pub fn relative_to(&self, reference_location: &GeoCoord) -> Result<CartesianCoord> {
@@ -308,6 +338,7 @@ pub struct Aircrafts {
     state: HashMap<u64, Aircraft>, // current state
     home: GeoCoord,
     persistence: Option<Database>,
+    should_record_positions: bool,
     max_radius: f64,
     max_altitude: f64,
 }
@@ -320,6 +351,7 @@ impl Default for Aircrafts {
             max_radius: -1.0,
             max_altitude: -1.0,
             persistence: None,
+            should_record_positions: false,
         }
     }
 }
@@ -332,10 +364,11 @@ impl Aircrafts {
     /// update/insert an aircraft from SBS1 frame
     pub fn feed(&mut self, frame: &sbs1::Frame) {
         // it gives a mutable reference to aircraft, or insert and return a new aircraft reference if it hasn't seen yet
-        let a = self
-            .state
-            .entry(frame.hexident)
-            .or_insert(Aircraft::new().with_hexident(frame.hexident));
+        let a = self.state.entry(frame.hexident).or_insert(
+            Aircraft::new()
+                .with_hexident(frame.hexident)
+                .with_traces(self.should_record_positions),
+        );
 
         // in-place update the state of the aircraft
         a.update(&frame);
@@ -498,6 +531,12 @@ impl AircraftsBuilder {
         self
     }
 
+    pub fn record_positions(mut self, enable: bool) -> Self {
+        self.0.should_record_positions = enable;
+
+        self
+    }
+
     pub fn build(self) -> Aircrafts {
         self.0
     }
@@ -508,8 +547,8 @@ mod test {
     use cli_table::{WithTitle, print_stdout};
 
     use crate::aircraft::*;
-    use crate::feeders::sbs1::Frame;
     use crate::database::models::AircraftMetadataEntry;
+    use crate::feeders::sbs1::Frame;
 
     const TEST_SBS1_FRAMES: &[&str] = &[
         "MSG,4,5,211,4CA2D6,10057,2008/11/28,14:53:49.986,2008/11/28,14:58:51.153,,,408.3,146.4,,,64,,,,,\r\n",
@@ -541,6 +580,9 @@ mod test {
             air2.update(&frame);
         }
 
+        assert!(air1.get_trace().is_none());
+        assert!(air2.get_trace().is_none());
+
         let air1_loc = air1.get_position();
         let air2_loc = air2.get_position();
 
@@ -565,7 +607,7 @@ mod test {
             .map(|&x| Frame::parse(&x).unwrap())
             .collect();
 
-        let mut aircrafts = Aircrafts::builder().build();
+        let mut aircrafts = Aircrafts::builder().record_positions(true).build();
 
         for frame in &frames {
             aircrafts.feed(frame);
@@ -575,6 +617,10 @@ mod test {
         let air1 = aircrafts.get(0x4CA2D6).unwrap();
         let air2 = aircrafts.get(0x4010E9).unwrap();
         let air3 = aircrafts.get(0x4CA2CB).unwrap();
+
+        assert_eq!(air1.get_trace().unwrap().len(), 1);
+        assert_eq!(air2.get_trace().unwrap().len(), 2);
+        assert_eq!(air3.get_trace().unwrap().len(), 0);
 
         let air1_loc = air1.get_position();
         let air2_loc = air2.get_position();

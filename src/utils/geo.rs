@@ -314,6 +314,27 @@ impl std::str::FromStr for GeoCoord {
     }
 }
 
+impl std::cmp::Ord for GeoCoord {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let dist = self - other;
+        dist.total_cmp(&0.0)
+    }
+}
+
+impl PartialOrd for GeoCoord {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for GeoCoord {
+    fn eq(&self, other: &Self) -> bool {
+        self.lat == other.lat && self.lon == other.lon
+    }
+}
+
+impl Eq for GeoCoord {}
+
 #[cfg(test)]
 mod test {
     use crate::utils::geo::{self, GeoCoord};

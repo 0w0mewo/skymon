@@ -34,6 +34,9 @@ pub struct Config {
 
     #[serde(default = "Config::minimum_refresh_rate_ms")]
     pub disp_refresh_rate_ms: u64,
+
+    #[serde(rename="posrec_enable", default = "Config::default_should_record_positions")]
+    pub enable_position_recording: bool,
 }
 
 impl Default for Config {
@@ -48,6 +51,7 @@ impl Default for Config {
             slient: Self::default_slient_mode(),
             disp_all: Self::default_display_all_aircrafts(),
             disp_refresh_rate_ms: Self::minimum_refresh_rate_ms(),
+            enable_position_recording: Self::default_should_record_positions(),
         }
     }
 }
@@ -60,7 +64,9 @@ impl std::fmt::Display for Config {
 Display all aircrafts: {}, Slient mode: {}, 
 Flush period: {} mins, 
 Home: {}, 
-sqlite DB path: {}"#,
+sqlite DB path: {},
+Enable position recording: {}
+"#,
             self.sbs1_server,
             self.detection_altitude,
             self.detection_dist,
@@ -69,6 +75,7 @@ sqlite DB path: {}"#,
             self.flush_period_mins,
             self.home,
             self.db_path,
+            self.enable_position_recording,
         )
     }
 }
@@ -122,6 +129,11 @@ impl Config {
     pub fn minimum_refresh_rate_ms() -> u64 {
         450
     }
+
+    #[inline]
+    fn default_should_record_positions() -> bool {
+        false
+    }
 }
 
 #[cfg(test)]
@@ -140,6 +152,7 @@ mod test {
         assert_eq!(conf.disp_refresh_rate_ms, Config::minimum_refresh_rate_ms());
         assert_eq!(conf.sbs1_server, Config::default_sbs1_server());
         assert_eq!(conf.slient, Config::default_slient_mode());
+        assert_eq!(conf.enable_position_recording, Config::default_should_record_positions());
         assert_eq!(conf.home, Config::default_home());
         assert!(conf.home.parse::<GeoCoord>().is_ok());
     }
