@@ -61,6 +61,7 @@ fn main() -> Result<()> {
         });
 
         // processing thread
+        let stop_signal = Arc::clone(&should_kill);
         let aircrafts_proc_handle = s.spawn(move |_| {
             let flush_period = time::Duration::minutes(config.flush_period_mins as i64);
             let home_coord = config.home.parse().unwrap_or_default();
@@ -75,6 +76,8 @@ fn main() -> Result<()> {
 
             if let Err(e) = aircrafts.import_aircrafts_metadata("assets/aircraft.csv.gz") {
                 eprintln!("fail to import aircrafts metadata: {}", e);
+                stop_signal.store(true);
+                return ;
             } else {
                 println!("aircrafts metadata imported");
             }
