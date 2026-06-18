@@ -22,10 +22,11 @@ const FEET_PER_METER: f64 = 0.3048;
 const UNKNOWN_AIRCRAFT_STR: &str = "Unknown";
 
 #[derive(Debug, Clone)]
-pub struct Aircraft {
+pub struct Aircraft<'p> {
     hexident: u64,
     callsign: String,
-    position: GeoCoord,                // last position
+    position: GeoCoord, // last position
+    observer_position: &'p GeoCoord,
     trace: Option<BTreeSet<GeoCoord>>, // trace of positions
     track: f64,
     ground_speed: f64,
@@ -39,7 +40,7 @@ pub struct Aircraft {
     closest_at: UtcDateTime,
 }
 
-impl std::fmt::Display for Aircraft {
+impl std::fmt::Display for Aircraft<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let (hexident, callsign) = self.identification();
         let location = self.get_position().unwrap_or_default();
@@ -60,7 +61,7 @@ impl std::fmt::Display for Aircraft {
     }
 }
 
-impl Default for Aircraft {
+impl Default for Aircraft<'_> {
     fn default() -> Self {
         Self {
             last_seen: UtcDateTime::UNIX_EPOCH,
@@ -77,11 +78,12 @@ impl Default for Aircraft {
             reg: UNKNOWN_AIRCRAFT_STR.into(),
             short_type: UNKNOWN_AIRCRAFT_STR.into(),
             trace: None,
+            observer_position: Default::default(),
         }
     }
 }
 
-impl TryInto<AircraftEntry> for &Aircraft {
+impl TryInto<AircraftEntry> for &Aircraft<'_> {
     type Error = crate::Error;
 
     fn try_into(self) -> std::prelude::v1::Result<AircraftEntry, Self::Error> {
@@ -110,7 +112,7 @@ impl TryInto<AircraftEntry> for &Aircraft {
     }
 }
 
-impl Into<AircraftTableRow> for &Aircraft {
+impl Into<AircraftTableRow> for &Aircraft<'_> {
     fn into(self) -> AircraftTableRow {
         AircraftTableRow {
             hexident: self.hexident,
@@ -124,7 +126,7 @@ impl Into<AircraftTableRow> for &Aircraft {
     }
 }
 
-impl Into<AircraftTableRow> for Aircraft {
+impl Into<AircraftTableRow> for Aircraft<'_> {
     fn into(self) -> AircraftTableRow {
         AircraftTableRow {
             hexident: self.hexident,
@@ -138,7 +140,7 @@ impl Into<AircraftTableRow> for Aircraft {
     }
 }
 
-impl Aircraft {
+impl<'p:'a, 'a> Aircraft<'a> {
     pub fn new() -> Self {
         Default::default()
     }
@@ -156,8 +158,13 @@ impl Aircraft {
         self
     }
 
+    pub fn with_observer_position(mut self, observer: &'p GeoCoord) -> Self {
+        self.observer_position = observer;
+        self
+    }
+
     /// update current states from SBS1 frame, ignored if hexidents are different
-    fn update(&mut self, sbs_frame: &sbs1::Frame, observer_position: &GeoCoord) {
+    fn update(&mut self, sbs_frame: &sbs1::Frame) {
         if sbs_frame.hexident != self.hexident {
             return;
         }
@@ -200,11 +207,11 @@ impl Aircraft {
         }
 
         // current distance to observer
-        self.dist = self.distance(observer_position);
-        
-        // update closest position to observer
+        self.dist = self.distance(self.observer_position);
+
+        // update the closest position to observer in all updates
         if let Some(plane_loc) = self.get_position() {
-            let dist = plane_loc - observer_position;
+            let dist = plane_loc - self.observer_position;
 
             if dist < self.closest_dist {
                 self.closest_position = plane_loc.clone();
@@ -310,16 +317,16 @@ impl Aircraft {
     }
 }
 
-pub struct Aircrafts {
-    state: HashMap<u64, Aircraft>, // current state
-    home: GeoCoord,
+pub struct Aircrafts<'a> {
+    state: HashMap<u64, Aircraft<'a>>, // current state
+    home: &'a GeoCoord,
     persistence: Option<Database>,
     should_record_positions: bool,
     max_radius: f64,
     max_altitude: f64,
 }
 
-impl Default for Aircrafts {
+impl Default for Aircrafts<'_> {
     fn default() -> Self {
         Self {
             state: HashMap::new(),
@@ -332,8 +339,8 @@ impl Default for Aircrafts {
     }
 }
 
-impl Aircrafts {
-    pub fn builder() -> AircraftsBuilder {
+impl<'a> Aircrafts<'a> {
+    pub fn builder() -> AircraftsBuilder<'a> {
         AircraftsBuilder::new()
     }
 
@@ -343,11 +350,11 @@ impl Aircrafts {
         let a = self.state.entry(frame.hexident).or_insert(
             Aircraft::new()
                 .with_hexident(frame.hexident)
-                .with_traces(self.should_record_positions),
+                .with_traces(self.should_record_positions).with_observer_position(&self.home),
         );
 
         // in-place update the state of the aircraft
-        a.update(&frame, &self.home);
+        a.update(&frame);
 
         // update aircraft registration and type only when it is empty
         // it should fetch and update once from the database record
@@ -371,7 +378,7 @@ impl Aircrafts {
     }
 
     /// get aircraft from state cache
-    pub fn get(&self, hexident: u64) -> Option<&Aircraft> {
+    pub fn get(&self, hexident: u64) -> Option<&Aircraft<'a>> {
         self.state.get(&hexident)
     }
 
@@ -426,12 +433,12 @@ impl Aircrafts {
     }
 
     /// iterate all recorded aircrafts
-    pub fn iter(&self) -> impl Iterator<Item = &Aircraft> {
+    pub fn iter(&self) -> impl Iterator<Item = &Aircraft<'a>> {
         self.state.values()
     }
 
     /// iterate all recorded aircrafts that have validate location and currently within maximum range
-    pub fn iter_within_radius(&self) -> impl Iterator<Item = &Aircraft> {
+    pub fn iter_within_radius(&self) -> impl Iterator<Item = &Aircraft<'a>> {
         self.iter().filter(|a| {
             // false if the aircraft location is undefined or out of maximum range
             // Notice it's always true if the location is defined and the maximum distance is less than 0
@@ -467,21 +474,21 @@ impl Aircrafts {
     }
 }
 
-impl Drop for Aircrafts {
+impl Drop for Aircrafts<'_> {
     fn drop(&mut self) {
         self.flush();
     }
 }
 
-pub struct AircraftsBuilder(Aircrafts);
+pub struct AircraftsBuilder<'b>(Aircrafts<'b>);
 
-impl AircraftsBuilder {
+impl <'p:'b, 'b> AircraftsBuilder<'b> {
     pub fn new() -> Self {
         Self(Aircrafts::default())
     }
 
-    pub fn home(mut self, home: &GeoCoord) -> Self {
-        self.0.home = home.clone();
+    pub fn home(mut self, home: &'p GeoCoord) -> Self {
+        self.0.home = home;
 
         self
     }
@@ -511,7 +518,7 @@ impl AircraftsBuilder {
         self
     }
 
-    pub fn build(self) -> Aircrafts {
+    pub fn build(self) -> Aircrafts<'b> {
         self.0
     }
 }
@@ -543,7 +550,6 @@ mod test {
     fn test_aircraft() {
         let mut air1 = Aircraft::new().with_hexident(0x4CA2D6);
         let mut air2 = Aircraft::new().with_hexident(0x4010E9);
-        let home: GeoCoord = "0.0, 0.0".parse().unwrap();
 
         let frames: Vec<Frame> = TEST_SBS1_FRAMES
             .iter()
@@ -551,8 +557,8 @@ mod test {
             .collect();
 
         for frame in &frames {
-            air1.update(&frame, &home);
-            air2.update(&frame, &home);
+            air1.update(&frame);
+            air2.update(&frame);
         }
 
         assert!(air1.get_trace().is_none());
