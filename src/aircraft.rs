@@ -3,6 +3,7 @@ use anyhow::{Context, Result, anyhow};
 use std::{
     collections::{BTreeSet, HashMap},
     fs,
+    io::{Seek, SeekFrom},
 };
 use time::{Duration, UtcDateTime};
 
@@ -140,7 +141,7 @@ impl Into<AircraftTableRow> for Aircraft<'_> {
     }
 }
 
-impl<'p:'a, 'a> Aircraft<'a> {
+impl<'p: 'a, 'a> Aircraft<'a> {
     pub fn new() -> Self {
         Default::default()
     }
@@ -350,7 +351,8 @@ impl<'a> Aircrafts<'a> {
         let a = self.state.entry(frame.hexident).or_insert(
             Aircraft::new()
                 .with_hexident(frame.hexident)
-                .with_traces(self.should_record_positions).with_observer_position(&self.home),
+                .with_traces(self.should_record_positions)
+                .with_observer_position(&self.home),
         );
 
         // in-place update the state of the aircraft
@@ -407,18 +409,17 @@ impl<'a> Aircrafts<'a> {
 
     pub fn import_aircrafts_metadata(&mut self, csv_gz_path: &str) -> Result<()> {
         if let Some(db) = self.persistence.as_mut() {
-            let hash = {
-                let agz_file =
-                    fs::File::open(csv_gz_path).context("fail to open aircrafts gzipped csv")?;
-                sha256_digest(agz_file).context("sha256 hasher")?
-            }; // make sure the file is opened as short as possible
+            let mut agz_file =
+                fs::File::open(csv_gz_path).context("fail to open aircrafts gzipped csv")?;
+            let hash = sha256_digest(&agz_file).context("sha256 hasher")?;
 
             let old_hash = db.get_registry_version()?;
             if hash == old_hash {
                 return Ok(());
             }
 
-            db.import_metadata_from_gzipped_csv(csv_gz_path, 10000)?;
+            agz_file.seek(SeekFrom::Start(0))?; // seek it back to the beginning of the file because `sha256_digest` consumed it
+            db.import_metadata_from_gzipped_csv(agz_file, 10000)?;
             db.insert_registry_version(&hash)?;
 
             Ok(())
@@ -482,7 +483,7 @@ impl Drop for Aircrafts<'_> {
 
 pub struct AircraftsBuilder<'b>(Aircrafts<'b>);
 
-impl <'p:'b, 'b> AircraftsBuilder<'b> {
+impl<'p: 'b, 'b> AircraftsBuilder<'b> {
     pub fn new() -> Self {
         Self(Aircrafts::default())
     }
@@ -707,7 +708,8 @@ mod test {
         aircrafts.flush();
 
         let db = aircrafts.persistence.as_mut().unwrap();
-        db.import_metadata_from_gzipped_csv("assets/aircraft.csv.gz", 10000)
+        let gzipped_csv_file = fs::File::open("assets/aircraft.csv.gz").unwrap();
+        db.import_metadata_from_gzipped_csv(gzipped_csv_file, 10000)
             .unwrap();
 
         let air1 = db.get_records_by_hexident(0x4CA2D6).unwrap();
@@ -738,7 +740,8 @@ mod test {
         let mut aircrafts = AircraftsBuilder::new().persistence(":memory:").build();
 
         let db = aircrafts.persistence.as_mut().unwrap();
-        db.import_metadata_from_gzipped_csv("assets/aircraft.csv.gz", 10000)
+        let gzipped_csv_file = fs::File::open("assets/aircraft.csv.gz").unwrap();
+        db.import_metadata_from_gzipped_csv(gzipped_csv_file, 10000)
             .unwrap();
 
         // 0x4CA2D6

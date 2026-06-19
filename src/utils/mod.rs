@@ -9,7 +9,7 @@ pub fn sleep_ms(ms: u64) {
     std::thread::sleep(std::time::Duration::from_millis(ms));
 }
 
-pub fn sha256_digest(input: impl io::Read) -> Result<String> {
+pub fn sha256_digest<R: io::Read>(input: R) -> Result<String> {
     let mut reader = io::BufReader::new(input);
     let mut hasher = sha2::Sha256::new();
     let mut buffer = [0u8; 4096];

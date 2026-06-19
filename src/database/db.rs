@@ -1,7 +1,4 @@
-use std::{
-    fs,
-    io::{self, BufRead},
-};
+use std::io::{self, BufRead};
 
 use anyhow::{Context, Result, anyhow};
 use flate2::read::GzDecoder;
@@ -264,14 +261,14 @@ impl Database {
         Ok(())
     }
 
-    pub fn import_metadata_from_gzipped_csv(
+    pub fn import_metadata_from_gzipped_csv<Z: io::Read>(
         &mut self,
-        csv_gz_path: &str,
+        csv_gz: Z,
         batch_size: usize,
     ) -> Result<()> {
-        let agz_file = fs::File::open(csv_gz_path).context("fail to open aircrafts gzipped csv")?;
-        let agz_file = io::BufReader::with_capacity(1024, agz_file);
-        let mut decoded = io::BufReader::new(GzDecoder::new(agz_file));
+        let mut decoded = io::BufReader::new(GzDecoder::new(csv_gz));
+        let mut total_imported = 0usize;
+        let mut expecting_total_imported = 0usize;
 
         // parse and insert csv rows
         let batch_import = |conn: &mut rqlite::Connection, rows: &[String]| -> Result<()> {
@@ -343,12 +340,14 @@ impl Database {
                     }
 
                     batched_rows.push(line_buf);
+                    expecting_total_imported += 1;
                 }
             }
 
             // leave one element in the vec to avoid the expensive resize operation
             if batched_rows.len() > batch_size - 1 {
                 batch_import(&mut self.conn, &batched_rows)?;
+                total_imported += batched_rows.len();
                 batched_rows.clear();
             }
         }
@@ -356,6 +355,15 @@ impl Database {
         // remaining parts
         if !batched_rows.is_empty() {
             batch_import(&mut self.conn, &batched_rows)?;
+            total_imported += batched_rows.len();
+        }
+
+        if total_imported != expecting_total_imported {
+            return Err(anyhow!(
+                "some rows are failed for unknown reason: expecting: {}, got: {}",
+                expecting_total_imported,
+                total_imported
+            ));
         }
 
         Ok(())
