@@ -124,9 +124,11 @@ fn main() -> Result<()> {
 
                     // we don't care about whether the current snapshot is passed to the display correctly,
                     // DON'T block here.
-                    let current_snapshots_of_aircrafts: Vec<AircraftTableRow> =
-                        aircrafts_iter.map(|a| a.into()).collect();
-                    _ = aircraft_tabrows_tx.try_send(current_snapshots_of_aircrafts);
+                    if aircraft_tabrows_tx.is_empty() {
+                        let current_snapshots_of_aircrafts: Vec<AircraftTableRow> =
+                            aircrafts_iter.map(|a| a.into()).collect();
+                        _ = aircraft_tabrows_tx.try_send(current_snapshots_of_aircrafts);
+                    }
                 }
             }
         });
