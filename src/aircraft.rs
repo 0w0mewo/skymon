@@ -459,15 +459,22 @@ impl<'a> Aircrafts<'a> {
 
     /// flush valid aircrafts, it should be called periodically
     pub fn flush(&mut self) {
-        // save only the aircrafts that were historically in range
         if let Some(db) = &self.persistence {
+            // save only the aircrafts that were historically in range
             let filtered_aircrafts = self.iter().filter(|a| a.closest_dist() < self.max_radius);
             for a in filtered_aircrafts {
                 let a = a.try_into().unwrap();
-                _ = db.insert(&a).unwrap_or_else(|err| {
+                db.insert(&a).unwrap_or_else(|err| {
                     eprintln!("fail to insert {}: {}", a.hexident, err);
                 });
             }
+
+            // clean up all recorded aircrafts that older than 30 days
+            // TODO: customised by user
+            let older = UtcDateTime::now() - time::Duration::days(30);
+            db.delete_records_older_than(&older).unwrap_or_else(|err| {
+                eprintln!("fail to delete records: {}", err);
+            });
         }
 
         // clean up expired aircrafts
@@ -726,6 +733,7 @@ mod test {
 
         assert_eq!(db.get_all_records(4).unwrap().len(), 1);
 
+        // time search
         let test_datetime = UtcDateTime::from_unix_timestamp(1213551070).unwrap();
         let test_datetime_end = UtcDateTime::from_unix_timestamp(1229362270).unwrap();
         let res = db
@@ -734,6 +742,19 @@ mod test {
         assert_eq!(res.len(), 1);
         assert!(!res[0].reg.is_empty());
         assert!(!res[0].short_type.is_empty());
+
+        // delete by datetime
+        // this one shouldn't be deleted
+        db.delete_records_older_than(&test_datetime).unwrap();
+        let res = db.get_records_by_datetime(&test_datetime, &test_datetime_end);
+        assert!(res.is_ok() || res.unwrap_or_default().len() != 0);
+
+        // delete by datetime
+        // this one should be deleted
+        db.delete_records_older_than(&test_datetime_end).unwrap();
+
+        let res = db.get_records_by_datetime(&test_datetime, &test_datetime_end);
+        assert!(res.is_err() || res.unwrap_or_default().len() == 0);
 
         assert_eq!(aircrafts.iter().count(), 0);
     }

@@ -78,7 +78,7 @@ fn main() -> Result<()> {
 
             let aircraft_csv_gz_path = cfg!(not(feature = "download_aircrafts_metadata"))
                 .then(|| "assets/aircraft.csv.gz")
-                .unwrap_or_default();
+                .unwrap_or("https://raw.githubusercontent.com/wiedehopf/tar1090-db/refs/heads/csv/aircraft.csv.gz");
             if let Err(e) = aircrafts.import_aircrafts_metadata(aircraft_csv_gz_path) {
                 eprintln!("fail to import aircrafts metadata: {}", e);
                 stop_signal.store(true);

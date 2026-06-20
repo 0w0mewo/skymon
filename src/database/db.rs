@@ -210,6 +210,20 @@ impl Database {
         }
     }
 
+    pub fn delete_records_older_than(&self, start: &UtcDateTime) -> Result<()> {
+                let conn = &self.conn;
+
+        let mut stmt = conn.prepare_cached(
+            r#"DELETE FROM aircrafts
+            WHERE last_update < :start;
+            "#,
+        )?;
+
+        stmt.execute(named_params! {":start": start})?;
+
+        Ok(())
+    }
+
     pub fn insert(&self, a: &AircraftEntry) -> Result<()> {
         if !a.is_valid() {
             return Err(anyhow!("invalid aircraft entry, possible missing fields"));
