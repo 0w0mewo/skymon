@@ -8,7 +8,7 @@ use time::{Duration, PrimitiveDateTime, UtcOffset};
 use crate::Error;
 
 #[derive(Debug, Clone, Copy, Default)]
-pub enum MsgType {
+pub(crate) enum MsgType {
     #[default]
     Unknown,
     EsIdentAndCategory,

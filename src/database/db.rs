@@ -10,7 +10,7 @@ use crate::{
     utils::geo::GeoCoord,
 };
 
-pub struct Database {
+pub(crate) struct Database {
     conn: rqlite::Connection,
 }
 
@@ -74,6 +74,7 @@ impl Database {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn get_records_by_hexident(&self, hexident: u64) -> Result<Vec<AircraftEntry>> {
         let conn = &self.conn;
 
