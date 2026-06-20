@@ -34,6 +34,27 @@ pub fn sha256_digest<R: io::Read>(input: R) -> Result<String> {
     Ok(hash)
 }
 
+#[cfg(feature = "download_aircrafts_metadata")]
+pub fn fetch_aircrafts_csv_gz(url: &str) -> Result<impl io::Read + io::Seek> {
+    let url = if url.is_empty() {
+        "https://raw.githubusercontent.com/wiedehopf/tar1090-db/refs/heads/csv/aircraft.csv.gz"
+    } else {
+        url
+    };
+
+    let resp = ureq::get(url).call()?.body_mut().read_to_vec()?;
+
+    Ok(io::Cursor::new(resp))
+}
+
+#[cfg(not(feature = "download_aircrafts_metadata"))]
+pub fn fetch_aircrafts_csv_gz(csv_gzpath: &str) -> Result<impl io::Read + io::Seek> {
+    use anyhow::Context;
+    use std::fs;
+
+    Ok(fs::File::open(csv_gzpath).context("fail to open aircrafts gzipped csv")?)
+}
+
 #[cfg(test)]
 mod test {
     use std::fs;

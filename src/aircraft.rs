@@ -2,7 +2,6 @@ use anyhow::{Context, Result, anyhow};
 
 use std::{
     collections::{BTreeSet, HashMap},
-    fs,
     io::{Seek, SeekFrom},
 };
 use time::{Duration, UtcDateTime};
@@ -13,8 +12,11 @@ use crate::{
         models::{AircraftEntry, AircraftTableRow},
     },
     feeders::sbs1,
-    utils::geo::{CartesianCoord, GeoCoord},
-    utils::sha256_digest,
+    utils::{
+        fetch_aircrafts_csv_gz,
+        geo::{CartesianCoord, GeoCoord},
+        sha256_digest,
+    },
 };
 
 const ALT_RESOLUTION: f64 = 1.0; // altitude resoultion in feet
@@ -409,9 +411,8 @@ impl<'a> Aircrafts<'a> {
 
     pub fn import_aircrafts_metadata(&mut self, csv_gz_path: &str) -> Result<()> {
         if let Some(db) = self.persistence.as_mut() {
-            let mut agz_file =
-                fs::File::open(csv_gz_path).context("fail to open aircrafts gzipped csv")?;
-            let hash = sha256_digest(&agz_file).context("sha256 hasher")?;
+            let mut agz_file = fetch_aircrafts_csv_gz(csv_gz_path)?;
+            let hash = sha256_digest(&mut agz_file).context("sha256 hasher")?;
 
             let old_hash = db.get_registry_version()?;
             if hash == old_hash {
@@ -526,6 +527,8 @@ impl<'p: 'b, 'b> AircraftsBuilder<'b> {
 
 #[cfg(test)]
 mod test {
+    use std::fs;
+
     use cli_table::{WithTitle, print_stdout};
 
     use crate::aircraft::*;
@@ -776,8 +779,11 @@ mod test {
             .persistence(":memory:")
             .build();
 
+        let aircraft_csv_gz_path = cfg!(not(feature = "download_aircrafts_metadata"))
+            .then(|| "assets/aircraft.csv.gz")
+            .unwrap_or_default();
         aircrafts
-            .import_aircrafts_metadata("assets/aircraft.csv.gz")
+            .import_aircrafts_metadata(aircraft_csv_gz_path)
             .unwrap();
 
         for frame in &frames {

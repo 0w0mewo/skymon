@@ -20,7 +20,7 @@ ureq = { version = "3.3", optional = true }
 
 [features]
 default = []
-auto_download_aircrafts_metadata = ["dep:ureq"]
+download_aircrafts_metadata = ["dep:ureq"]
 
 [profile.release]
 codegen-units = 1

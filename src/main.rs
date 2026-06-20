@@ -76,7 +76,10 @@ fn main() -> Result<()> {
                 .record_positions(config.enable_position_recording)
                 .build();
 
-            if let Err(e) = aircrafts.import_aircrafts_metadata("assets/aircraft.csv.gz") {
+            let aircraft_csv_gz_path = cfg!(not(feature = "download_aircrafts_metadata"))
+                .then(|| "assets/aircraft.csv.gz")
+                .unwrap_or_default();
+            if let Err(e) = aircrafts.import_aircrafts_metadata(aircraft_csv_gz_path) {
                 eprintln!("fail to import aircrafts metadata: {}", e);
                 stop_signal.store(true);
                 return;
