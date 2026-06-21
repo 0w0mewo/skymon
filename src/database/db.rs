@@ -87,7 +87,7 @@ impl Database {
         )?;
 
         let res: Vec<AircraftEntry> = stmt
-            .query_map(named_params! {":hexident": hexident as i64}, |row| {
+            .query_map(named_params! {":hexident": hexident}, |row| {
                 let (lat, lon) = (row.get(5)?, row.get(6)?);
 
                 Ok(AircraftEntry {
@@ -120,7 +120,7 @@ impl Database {
             "#,
         )?;
 
-        let res = stmt.query_one(named_params! {":hexident": hexident as i64}, |row| {
+        let res = stmt.query_one(named_params! {":hexident": hexident}, |row| {
             Ok(AircraftMetadataEntry {
                 hexident: hexident,
                 reg: row.get(0)?,
@@ -146,12 +146,11 @@ impl Database {
         )?;
 
         let res: Vec<AircraftEntry> = stmt
-            .query_map(named_params! {":limit": limit as i64}, |row| {
+            .query_map(named_params! {":limit": limit}, |row| {
                 let (lat, lon) = (row.get(4)?, row.get(5)?);
-                let hexident: i64 = row.get(0)?;
 
                 Ok(AircraftEntry {
-                    hexident: hexident as u64,
+                    hexident: row.get(0)?,
                     callsign: row.get(1)?,
                     closest_at: row.get(2)?,
                     closest_dist: row.get(3)?,
@@ -188,10 +187,9 @@ impl Database {
         let res: Vec<AircraftEntry> = stmt
             .query_map(named_params! {":start": start, ":end": end}, |row| {
                 let (lat, lon) = (row.get(6)?, row.get(7)?);
-                let hexident: i64 = row.get(0)?;
 
                 Ok(AircraftEntry {
-                    hexident: hexident as u64,
+                    hexident: row.get(0)?,
                     callsign: row.get(1)?,
                     reg: row.get(2)?,
                     short_type: row.get(3)?,
@@ -240,7 +238,7 @@ impl Database {
                     closest_lat = excluded.closest_lat,
                     closest_lon = excluded.closest_lon;
             "#,
-            named_params! {":hexident": a.hexident as i64, ":callsign": a.callsign, ":last_update": a.closest_at, 
+            named_params! {":hexident": a.hexident, ":callsign": a.callsign, ":last_update": a.closest_at, 
             ":closest_dist": a.closest_dist,":closest_lat": a.closest_location.lat, ":closest_lon": a.closest_location.lon },
         )?;
         }
@@ -334,7 +332,7 @@ impl Database {
                         ;",
                 )?;
 
-                stmt.execute(named_params! {":hexident": hexid as i64, ":reg": reg, ":type": _type, ":descr": descr, ":owner": owner, ":year": year})?;
+                stmt.execute(named_params! {":hexident": hexid, ":reg": reg, ":type": _type, ":descr": descr, ":owner": owner, ":year": year})?;
             }
 
             Ok(tx.commit()?)

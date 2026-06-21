@@ -37,6 +37,9 @@ pub struct Config {
 
     #[serde(rename="posrec_enable", default = "Config::default_should_record_positions")]
     pub enable_position_recording: bool,
+
+    #[serde(default = "Config::default_clean_older_than_days")]
+    pub delete_older_than_days: u32,
 }
 
 impl Default for Config {
@@ -52,6 +55,7 @@ impl Default for Config {
             disp_all: Self::default_display_all_aircrafts(),
             disp_refresh_rate_ms: Self::minimum_refresh_rate_ms(),
             enable_position_recording: Self::default_should_record_positions(),
+            delete_older_than_days: Self::default_clean_older_than_days(),
         }
     }
 }
@@ -133,6 +137,11 @@ impl Config {
     #[inline]
     fn default_should_record_positions() -> bool {
         false
+    }
+
+    #[inline]
+    fn default_clean_older_than_days() -> u32 {
+        30
     }
 }
 

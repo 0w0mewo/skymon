@@ -324,6 +324,7 @@ pub struct Aircrafts<'a> {
     state: HashMap<u64, Aircraft<'a>>, // current state
     home: &'a GeoCoord,
     persistence: Option<Database>,
+    persistence_expire_days: Option<u32>,
     should_record_positions: bool,
     max_radius: f64,
     max_altitude: f64,
@@ -338,6 +339,7 @@ impl Default for Aircrafts<'_> {
             max_altitude: -1.0,
             persistence: None,
             should_record_positions: false,
+            persistence_expire_days: None,
         }
     }
 }
@@ -459,6 +461,7 @@ impl<'a> Aircrafts<'a> {
 
     /// flush valid aircrafts, it should be called periodically
     pub fn flush(&mut self) {
+        // clean up database
         if let Some(db) = &self.persistence {
             // save only the aircrafts that were historically in range
             let filtered_aircrafts = self.iter().filter(|a| a.closest_dist() < self.max_radius);
@@ -469,15 +472,16 @@ impl<'a> Aircrafts<'a> {
                 });
             }
 
-            // clean up all recorded aircrafts that older than 30 days
-            // TODO: customised by user
-            let older = UtcDateTime::now() - time::Duration::days(30);
-            db.delete_records_older_than(&older).unwrap_or_else(|err| {
-                eprintln!("fail to delete records: {}", err);
-            });
+            // clean up all recorded aircrafts that older than some days
+            if let Some(expire_days) = self.persistence_expire_days {
+                let older = UtcDateTime::now() - time::Duration::days(expire_days as i64);
+                db.delete_records_older_than(&older).unwrap_or_else(|err| {
+                    eprintln!("fail to delete records: {}", err);
+                });
+            }
         }
 
-        // clean up expired aircrafts
+        // clean up expired aircrafts in the state cache
         self.state
             .retain(|_, a| UtcDateTime::now() - a.last_seen <= Duration::minutes(1));
     }
@@ -503,8 +507,18 @@ impl<'p: 'b, 'b> AircraftsBuilder<'b> {
     }
 
     pub fn persistence(mut self, db_path: &str) -> Self {
-        let db = Database::open(db_path).expect("fail to open DB");
-        self.0.persistence = Some(db);
+        self.0.persistence = Database::open(db_path)
+            .or_else(|err| {
+                eprintln!("fail to open database, skip persistence: {err}");
+                Err(())
+            })
+            .ok();
+
+        self
+    }
+
+    pub fn persistence_expire_days(mut self, days: u32) -> Self {
+        self.0.persistence_expire_days = if days == 0 { None } else { Some(days) };
 
         self
     }

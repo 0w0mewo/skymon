@@ -73,6 +73,7 @@ fn main() -> Result<()> {
                 .home(&home_coord)
                 .radius(config.detection_dist)
                 .persistence(&config.db_path)
+                .persistence_expire_days(config.delete_older_than_days)
                 .record_positions(config.enable_position_recording)
                 .build();
 
