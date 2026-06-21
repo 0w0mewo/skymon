@@ -474,7 +474,8 @@ impl<'a> Aircrafts<'a> {
 
             // clean up all recorded aircrafts that older than some days
             if let Some(expire_days) = self.persistence_expire_days {
-                let older = UtcDateTime::now() - time::Duration::days(expire_days as i64);
+                let older = UtcDateTime::now().replace_time(time::Time::MIDNIGHT)
+                    - time::Duration::days(expire_days as i64);
                 db.delete_records_older_than(&older).unwrap_or_else(|err| {
                     eprintln!("fail to delete records: {}", err);
                 });
