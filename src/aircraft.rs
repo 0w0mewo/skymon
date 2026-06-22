@@ -23,7 +23,7 @@ use crate::{
 const ALT_RESOLUTION: f64 = 1.0; // altitude resoultion in feet
 const VRATE_RESOLUTION: f64 = 1.0; // vertical rate resolution in feet
 const FEET_PER_METER: f64 = 0.3048;
-const DEFAULT_GUARD_STR: &str = "Unknown";
+const UNKNOWN_AIRCRAFT_STR: &str = "Unknown";
 const PRE_ALLOCATED_CAP: usize = 20;
 
 #[derive(Debug, Clone)]
@@ -143,8 +143,8 @@ impl<'p: 'a, 'a> Aircraft<'a> {
             closest_at: UtcDateTime::UNIX_EPOCH,
             dist: f64::INFINITY,
             track: f64::INFINITY,
-            reg: DEFAULT_GUARD_STR.into(),
-            short_type: DEFAULT_GUARD_STR.into(),
+            reg: Default::default(),
+            short_type: Default::default(),
             trace: None,
             observer_position: Default::default(),
         }
@@ -366,16 +366,16 @@ impl<'a> Aircrafts<'a> {
 
         // update aircraft registration and type only when it is not set to anything
         // it should fetch and update once from the database record
-        if a.reg == DEFAULT_GUARD_STR || a.short_type == DEFAULT_GUARD_STR {
+        if a.reg.is_empty() || a.short_type.is_empty() {
             if let Some(db) = self.persistence.as_ref() {
                 if let Ok(metadata) = db.get_metadata_by_hexident(a.hexident) {
                     a.reg = metadata.reg;
                     a.short_type = metadata.short_type;
                 } else {
-                    // clear to empty to avoid triggering database searching again and again because of the
+                    // avoid triggering database searching again and again because of the
                     // empty row error
-                    a.reg.clear();
-                    a.short_type.clear();
+                    a.reg = UNKNOWN_AIRCRAFT_STR.into();
+                    a.short_type = UNKNOWN_AIRCRAFT_STR.into();
                 }
             }
         }
