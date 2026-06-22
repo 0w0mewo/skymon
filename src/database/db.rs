@@ -1,12 +1,14 @@
 use std::io::{self, BufRead};
 
-use anyhow::{Context, Result, anyhow};
 use flate2::read::GzDecoder;
 use rusqlite::{self as rqlite, named_params};
 use time::UtcDateTime;
 
 use crate::{
-    database::models::{AircraftEntry, AircraftMetadataEntry},
+    database::{
+        Error, QueryResult,
+        models::{AircraftEntry, AircraftMetadataEntry},
+    },
     utils::geo::GeoCoord,
 };
 
@@ -15,17 +17,17 @@ pub(crate) struct Database {
 }
 
 impl Database {
-    pub fn open(db_path: &str) -> Result<Database> {
+    pub fn open(db_path: &str) -> QueryResult<Database> {
         let conn = rqlite::Connection::open(db_path)?;
         let db = Self { conn };
 
-        db.setup_pragma().context("fail to setup PRAGMAs")?;
-        db.setup_tables().context("fail to create table")?;
+        db.setup_pragma()?;
+        db.setup_tables()?;
 
         Ok(db)
     }
 
-    fn setup_pragma(&self) -> Result<()> {
+    fn setup_pragma(&self) -> rqlite::Result<()> {
         let conn = &self.conn;
 
         conn.pragma_update(None, "foreign_keys", "ON")?;
@@ -38,7 +40,7 @@ impl Database {
         Ok(())
     }
 
-    fn setup_tables(&self) -> Result<()> {
+    fn setup_tables(&self) -> rqlite::Result<()> {
         self.conn.execute_batch(
             r#"    
     CREATE TABLE IF NOT EXISTS "aircrafts" (
@@ -75,7 +77,7 @@ impl Database {
     }
 
     #[allow(dead_code)]
-    pub fn get_records_by_hexident(&self, hexident: u64) -> Result<Vec<AircraftEntry>> {
+    pub fn get_records_by_hexident(&self, hexident: u64) -> QueryResult<Vec<AircraftEntry>> {
         let conn = &self.conn;
 
         let mut stmt = conn.prepare_cached(
@@ -110,7 +112,7 @@ impl Database {
         }
     }
 
-    pub fn get_metadata_by_hexident(&self, hexident: u64) -> Result<AircraftMetadataEntry> {
+    pub fn get_metadata_by_hexident(&self, hexident: u64) -> QueryResult<AircraftMetadataEntry> {
         let conn = &self.conn;
 
         let mut stmt = conn.prepare_cached(
@@ -134,7 +136,7 @@ impl Database {
         Ok(res)
     }
 
-    pub fn get_all_records(&self, limit: u64) -> Result<Vec<AircraftEntry>> {
+    pub fn get_all_records(&self, limit: u64) -> QueryResult<Vec<AircraftEntry>> {
         let conn = &self.conn;
 
         let mut stmt = conn.prepare_cached(
@@ -172,7 +174,7 @@ impl Database {
         &self,
         start: &UtcDateTime,
         end: &UtcDateTime,
-    ) -> Result<Vec<AircraftEntry>> {
+    ) -> QueryResult<Vec<AircraftEntry>> {
         let conn = &self.conn;
 
         let mut stmt = conn.prepare_cached(
@@ -208,8 +210,8 @@ impl Database {
         }
     }
 
-    pub fn delete_records_older_than(&self, start: &UtcDateTime) -> Result<()> {
-                let conn = &self.conn;
+    pub fn delete_records_older_than(&self, start: &UtcDateTime) -> QueryResult<()> {
+        let conn = &self.conn;
 
         let mut stmt = conn.prepare_cached(
             r#"DELETE FROM aircrafts
@@ -222,9 +224,9 @@ impl Database {
         Ok(())
     }
 
-    pub fn insert(&self, a: &AircraftEntry) -> Result<()> {
+    pub fn insert(&self, a: &AircraftEntry) -> QueryResult<()> {
         if !a.is_valid() {
-            return Err(anyhow!("invalid aircraft entry, possible missing fields"));
+            return Err(Error::InvalidInput);
         }
 
         if a.closest_location.is_valid() {
@@ -246,7 +248,7 @@ impl Database {
         Ok(())
     }
 
-    pub(crate) fn get_registry_version(&self) -> Result<String> {
+    pub(crate) fn get_registry_version(&self) -> QueryResult<String> {
         let conn = &self.conn;
         let mut stmt = conn.prepare_cached(
             r#"SELECT hash
@@ -262,7 +264,7 @@ impl Database {
         Ok(res)
     }
 
-    pub(crate) fn insert_registry_version(&self, hash: &str) -> Result<()> {
+    pub(crate) fn insert_registry_version(&self, hash: &str) -> QueryResult<()> {
         self.conn.execute(
             r#"INSERT INTO registry_version (hash) 
                 VALUES (:hash) ON CONFLICT(hash) 
@@ -278,13 +280,13 @@ impl Database {
         &mut self,
         csv_gz: Z,
         batch_size: usize,
-    ) -> Result<()> {
+    ) -> QueryResult<()> {
         let mut decoded = io::BufReader::new(GzDecoder::new(csv_gz));
         let mut total_imported = 0usize;
         let mut expecting_total_imported = 0usize;
 
         // parse and insert csv rows
-        let batch_import = |conn: &mut rqlite::Connection, rows: &[String]| -> Result<()> {
+        let batch_import = |conn: &mut rqlite::Connection, rows: &[String]| -> QueryResult<()> {
             let tx = conn.transaction()?;
 
             for row in rows {
@@ -372,11 +374,10 @@ impl Database {
         }
 
         if total_imported != expecting_total_imported {
-            return Err(anyhow!(
+            return Err(Error::Unknown(format!(
                 "some rows are failed for unknown reason: expecting: {}, got: {}",
-                expecting_total_imported,
-                total_imported
-            ));
+                expecting_total_imported, total_imported
+            )));
         }
 
         Ok(())

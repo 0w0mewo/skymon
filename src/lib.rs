@@ -1,3 +1,5 @@
+use std::io;
+
 pub mod aircraft;
 pub mod feeders;
 pub mod config;
@@ -11,9 +13,7 @@ pub enum Error {
     #[error("incomplete frame")]
     IncompleteFrame,
     #[error("connection closed")]
-    ConnectionClosed,
-    #[error("connection reset")]
-    ConnectionReset,
+    ConnectionClosed(#[from] io::Error),
     #[error("parse error")]
     ParseError,
     #[error("invalid input")]

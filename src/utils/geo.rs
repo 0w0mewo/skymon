@@ -1,6 +1,4 @@
 use std::{fmt::write, ops::Sub};
-
-use anyhow::Result;
 use map_3d::{self};
 
 #[derive(Debug, Clone, thiserror::Error)]
@@ -26,7 +24,7 @@ impl CartesianCoord {
     }
 
     /// distance to another coord
-    pub fn distance(&self, to: &CartesianCoord) -> Result<f64> {
+    pub fn distance(&self, to: &CartesianCoord) -> Result<f64, Error> {
         match self {
             CartesianCoord::ThreeDimension { x, y, z } => match to {
                 CartesianCoord::ThreeDimension {

@@ -1,4 +1,3 @@
-use anyhow::Result;
 use std::{
     io::{self, BufRead},
     net,
@@ -167,7 +166,7 @@ impl TcpFetcher {
     }
 
     /// read and parse one SBS1 frame
-    pub fn read_frame(&mut self) -> Result<Frame> {
+    pub fn read_frame(&mut self) -> Result<Frame, Error> {
         let mut line = String::new();
 
         // read and parse one line at a time
@@ -176,10 +175,10 @@ impl TcpFetcher {
             Ok(0) => {
                 if line.is_empty() {
                     // it closes normally
-                    return Err(Error::ConnectionClosed.into());
+                    return Err(Error::ConnectionClosed(io::ErrorKind::ConnectionAborted.into()).into());
                 } else {
                     // reset by peer because there are still some bytes left without finish processing
-                    return Err(Error::ConnectionReset.into());
+                    return Err(Error::ConnectionClosed(io::ErrorKind::ConnectionReset.into()).into());
                 }
             }
             // socket is not closed

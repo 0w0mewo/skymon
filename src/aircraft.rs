@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 
 use std::{
     collections::{BTreeSet, HashMap},
@@ -7,6 +7,7 @@ use std::{
 use time::{Duration, UtcDateTime};
 
 use crate::{
+    Error,
     database::{
         db::Database,
         models::{AircraftEntry, AircraftTableRow},
@@ -251,12 +252,12 @@ impl<'p: 'a, 'a> Aircraft<'a> {
             .and_then(|trace| Some(trace.iter().collect()))
     }
 
-    pub fn relative_to(&self, reference_location: &GeoCoord) -> Result<CartesianCoord> {
+    pub fn relative_to(&self, reference_location: &GeoCoord) -> Result<CartesianCoord, Error> {
         if let Some(plane_loc) = self.get_position() {
             return Ok(plane_loc.relative_to(reference_location));
         }
 
-        Err(anyhow!("invalid location"))
+        Err(Error::InvalidInput.into())
     }
 
     /// distance to the reference point
@@ -391,9 +392,9 @@ impl<'a> Aircrafts<'a> {
     /// dump all seen aircrafts from database
     pub fn dump_all_seen(&self, limit: u64) -> Result<Vec<AircraftEntry>> {
         if let Some(db) = self.persistence.as_ref() {
-            db.get_all_records(limit)
+            Ok(db.get_all_records(limit)?)
         } else {
-            Err(anyhow!("database is not set"))
+            Err(Error::InvalidInput.into())
         }
     }
 
@@ -405,9 +406,9 @@ impl<'a> Aircrafts<'a> {
         end: &UtcDateTime,
     ) -> Result<Vec<AircraftEntry>> {
         if let Some(db) = self.persistence.as_ref() {
-            db.get_records_by_datetime(start, end)
+            Ok(db.get_records_by_datetime(start, end)?)
         } else {
-            Err(anyhow!("database is not set"))
+            Err(Error::InvalidInput.into())
         }
     }
 
@@ -427,7 +428,7 @@ impl<'a> Aircrafts<'a> {
 
             Ok(())
         } else {
-            Err(anyhow!("database is not set"))
+            Err(Error::InvalidInput.into())
         }
     }
 
