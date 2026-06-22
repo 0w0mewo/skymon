@@ -23,7 +23,8 @@ use crate::{
 const ALT_RESOLUTION: f64 = 1.0; // altitude resoultion in feet
 const VRATE_RESOLUTION: f64 = 1.0; // vertical rate resolution in feet
 const FEET_PER_METER: f64 = 0.3048;
-const UNKNOWN_AIRCRAFT_STR: &str = "Unknown";
+const DEFAULT_GUARD_STR: &str = "Unknown";
+const PRE_ALLOCATED_CAP: usize = 20;
 
 #[derive(Debug, Clone)]
 pub struct Aircraft<'p> {
@@ -67,23 +68,7 @@ impl std::fmt::Display for Aircraft<'_> {
 
 impl Default for Aircraft<'_> {
     fn default() -> Self {
-        Self {
-            last_seen: UtcDateTime::UNIX_EPOCH,
-            ground_speed: 0.0,
-            vertical_rate: 0.0,
-            hexident: 0,
-            callsign: String::default(),
-            position: Default::default(),
-            closest_dist: f64::INFINITY,
-            closest_position: Default::default(),
-            closest_at: UtcDateTime::UNIX_EPOCH,
-            dist: f64::INFINITY,
-            track: f64::INFINITY,
-            reg: UNKNOWN_AIRCRAFT_STR.into(),
-            short_type: UNKNOWN_AIRCRAFT_STR.into(),
-            trace: None,
-            observer_position: Default::default(),
-        }
+        Self::new()
     }
 }
 
@@ -146,7 +131,23 @@ impl Into<AircraftTableRow> for Aircraft<'_> {
 
 impl<'p: 'a, 'a> Aircraft<'a> {
     pub fn new() -> Self {
-        Default::default()
+        Self {
+            last_seen: UtcDateTime::UNIX_EPOCH,
+            ground_speed: 0.0,
+            vertical_rate: 0.0,
+            hexident: 0,
+            callsign: String::default(),
+            position: Default::default(),
+            closest_dist: f64::INFINITY,
+            closest_position: Default::default(),
+            closest_at: UtcDateTime::UNIX_EPOCH,
+            dist: f64::INFINITY,
+            track: f64::INFINITY,
+            reg: DEFAULT_GUARD_STR.into(),
+            short_type: DEFAULT_GUARD_STR.into(),
+            trace: None,
+            observer_position: Default::default(),
+        }
     }
 
     pub fn with_hexident(mut self, hexident: u64) -> Self {
@@ -334,7 +335,7 @@ pub struct Aircrafts<'a> {
 impl Default for Aircrafts<'_> {
     fn default() -> Self {
         Self {
-            state: HashMap::new(),
+            state: HashMap::with_capacity(PRE_ALLOCATED_CAP),
             home: Default::default(),
             max_radius: -1.0,
             max_altitude: -1.0,
@@ -363,13 +364,18 @@ impl<'a> Aircrafts<'a> {
         // in-place update the state of the aircraft
         a.update(&frame);
 
-        // update aircraft registration and type only when it is empty
+        // update aircraft registration and type only when it is not set to anything
         // it should fetch and update once from the database record
-        if a.reg == UNKNOWN_AIRCRAFT_STR || a.short_type == UNKNOWN_AIRCRAFT_STR {
+        if a.reg == DEFAULT_GUARD_STR || a.short_type == DEFAULT_GUARD_STR {
             if let Some(db) = self.persistence.as_ref() {
                 if let Ok(metadata) = db.get_metadata_by_hexident(a.hexident) {
                     a.reg = metadata.reg;
                     a.short_type = metadata.short_type;
+                } else {
+                    // clear to empty to avoid triggering database searching again and again because of the
+                    // empty row error
+                    a.reg.clear();
+                    a.short_type.clear();
                 }
             }
         }
@@ -486,6 +492,7 @@ impl<'a> Aircrafts<'a> {
         // clean up expired aircrafts in the state cache
         self.state
             .retain(|_, a| UtcDateTime::now() - a.last_seen <= Duration::minutes(1));
+        self.state.shrink_to(PRE_ALLOCATED_CAP);
     }
 }
 
