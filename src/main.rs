@@ -69,24 +69,21 @@ fn main() -> Result<()> {
             let mut stdout = io::stdout();
             let mut last_flush_time = std_time::Instant::now();
 
-            let mut aircrafts = AircraftsBuilder::new()
+            let mut aircrafts = match AircraftsBuilder::new()
                 .home(&home_coord)
                 .radius(config.detection_dist)
                 .persistence(&config.db_path)
                 .persistence_expire_days(config.delete_older_than_days)
                 .record_positions(config.enable_position_recording)
-                .build();
-
-            let aircraft_csv_gz_path = cfg!(not(feature = "download_aircrafts_metadata"))
-                .then(|| "assets/aircraft.csv.gz")
-                .unwrap_or("https://raw.githubusercontent.com/wiedehopf/tar1090-db/refs/heads/csv/aircraft.csv.gz");
-            if let Err(e) = aircrafts.import_aircrafts_metadata(aircraft_csv_gz_path) {
-                eprintln!("fail to import aircrafts metadata: {}", e);
-                stop_signal.store(true);
-                return;
-            } else {
-                println!("aircrafts metadata imported");
-            }
+                .build()
+            {
+                Ok(aircrafts) => aircrafts,
+                Err(e) => {
+                    eprintln!("fail to import aircrafts metadata: {e}");
+                    stop_signal.store(true);
+                    return;
+                }
+            };
 
             loop {
                 // update aircrafts state by frames from feeder

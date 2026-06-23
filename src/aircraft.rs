@@ -418,7 +418,7 @@ impl<'a> Aircrafts<'a> {
         }
     }
 
-    pub fn import_aircrafts_metadata(&mut self, csv_gz_path: &str) -> Result<()> {
+    fn import_aircrafts_metadata(&mut self, csv_gz_path: &str) -> Result<()> {
         if let Some(db) = self.persistence.as_mut() {
             let mut agz_file = fetch_aircrafts_csv_gz(csv_gz_path)?;
             let hash = sha256_digest(&mut agz_file).context("sha256 hasher")?;
@@ -550,15 +550,22 @@ impl<'p: 'b, 'b> AircraftsBuilder<'b> {
         self
     }
 
-    pub fn build(self) -> Aircrafts<'b> {
-        self.0
+    pub fn build(mut self) -> Result<Aircrafts<'b>> {
+        if self.0.persistence.is_some() {
+            // TODO: user config
+            let aircraft_csv_gz_path = cfg!(not(feature = "download_aircrafts_metadata"))
+                .then(|| "assets/aircraft.csv.gz")
+                .unwrap_or("https://raw.githubusercontent.com/wiedehopf/tar1090-db/refs/heads/csv/aircraft.csv.gz");
+
+            self.0.import_aircrafts_metadata(aircraft_csv_gz_path)?;
+        }
+
+        Ok(self.0)
     }
 }
 
 #[cfg(test)]
 mod test {
-    use std::fs;
-
     use cli_table::{WithTitle, print_stdout};
 
     use crate::aircraft::*;
@@ -622,7 +629,7 @@ mod test {
             .map(|&x| Frame::parse(&x).unwrap())
             .collect();
 
-        let mut aircrafts = Aircrafts::builder().record_positions(true).build();
+        let mut aircrafts = Aircrafts::builder().record_positions(true).build().unwrap();
 
         for frame in &frames {
             aircrafts.feed(frame);
@@ -670,7 +677,7 @@ mod test {
             .map(|&x| Frame::parse(&x).unwrap())
             .collect();
 
-        let mut aircrafts = Aircrafts::builder().build();
+        let mut aircrafts = Aircrafts::builder().build().unwrap();
 
         for frame in &frames {
             aircrafts.feed(frame);
@@ -688,7 +695,11 @@ mod test {
             .iter()
             .map(|&x| Frame::parse(&x).unwrap())
             .collect();
-        let mut aircrafts = AircraftsBuilder::new().home(&home).radius(-1.0).build();
+        let mut aircrafts = AircraftsBuilder::new()
+            .home(&home)
+            .radius(-1.0)
+            .build()
+            .unwrap();
 
         for frame in &frames {
             aircrafts.feed(frame);
@@ -708,7 +719,11 @@ mod test {
             .iter()
             .map(|&x| Frame::parse(&x).unwrap())
             .collect();
-        let mut aircrafts = AircraftsBuilder::new().home(&home).radius(10_000.0).build();
+        let mut aircrafts = AircraftsBuilder::new()
+            .home(&home)
+            .radius(10_000.0)
+            .build()
+            .unwrap();
 
         for frame in &frames {
             aircrafts.feed(frame);
@@ -732,18 +747,22 @@ mod test {
             .home(&home)
             .radius(10_000.0)
             .persistence(":memory:")
-            .build();
+            .build()
+            .unwrap();
 
         for frame in &frames {
             aircrafts.feed(frame);
         }
 
+        // test table
+        let planes: Vec<AircraftTableRow> = aircrafts.iter().map(|a| a.into()).collect();
+        let tab = planes.with_title();
+        assert!(print_stdout(tab).is_ok());
+
         aircrafts.flush();
 
+        // database test
         let db = aircrafts.persistence.as_mut().unwrap();
-        let gzipped_csv_file = fs::File::open("assets/aircraft.csv.gz").unwrap();
-        db.import_metadata_from_gzipped_csv(gzipped_csv_file, 10000)
-            .unwrap();
 
         let air1 = db.get_records_by_hexident(0x4CA2D6).unwrap();
         assert!(!air1.is_empty() && air1.len() == 1);
@@ -755,6 +774,24 @@ mod test {
         assert!(db.get_records_by_hexident(0x4CA2CB).is_err());
 
         assert_eq!(db.get_all_records(4).unwrap().len(), 1);
+
+        // 0x4CA2D6
+        let AircraftMetadataEntry {
+            reg, short_type, ..
+        } = db.get_metadata_by_hexident(0x4CA2D6).unwrap_or_default();
+        assert_eq!(reg, "EI-DLJ");
+        assert_eq!(short_type, "B738");
+
+        // something else
+        let AircraftMetadataEntry {
+            reg,
+            short_type,
+            descr,
+            ..
+        } = db.get_metadata_by_hexident(0x004013).unwrap_or_default();
+        assert_eq!(reg, "Z-FJF");
+        assert_eq!(short_type, "E145");
+        assert!(!descr.is_empty());
 
         // time search
         let test_datetime = UtcDateTime::from_unix_timestamp(1213551070).unwrap();
@@ -780,62 +817,5 @@ mod test {
         assert!(res.is_err() || res.unwrap_or_default().len() == 0);
 
         assert_eq!(aircrafts.iter().count(), 0);
-    }
-
-    #[test]
-    fn test_aircraft_metadata_import() {
-        let mut aircrafts = AircraftsBuilder::new().persistence(":memory:").build();
-
-        let db = aircrafts.persistence.as_mut().unwrap();
-        let gzipped_csv_file = fs::File::open("assets/aircraft.csv.gz").unwrap();
-        db.import_metadata_from_gzipped_csv(gzipped_csv_file, 10000)
-            .unwrap();
-
-        // 0x4CA2D6
-        let AircraftMetadataEntry {
-            reg, short_type, ..
-        } = db.get_metadata_by_hexident(0x4CA2D6).unwrap_or_default();
-        assert_eq!(reg, "EI-DLJ");
-        assert_eq!(short_type, "B738");
-
-        // something else
-        let AircraftMetadataEntry {
-            reg,
-            short_type,
-            descr,
-            ..
-        } = db.get_metadata_by_hexident(0x004013).unwrap_or_default();
-        assert_eq!(reg, "Z-FJF");
-        assert_eq!(short_type, "E145");
-        assert!(!descr.is_empty());
-    }
-
-    #[test]
-    fn test_table_print() {
-        let home: GeoCoord = "51.455, -1.0281".parse().unwrap();
-        let frames: Vec<Frame> = TEST_SBS1_FRAMES
-            .iter()
-            .map(|&x| Frame::parse(&x).unwrap())
-            .collect();
-        let mut aircrafts = AircraftsBuilder::new()
-            .home(&home)
-            .radius(10_000.0)
-            .persistence(":memory:")
-            .build();
-
-        let aircraft_csv_gz_path = cfg!(not(feature = "download_aircrafts_metadata"))
-            .then(|| "assets/aircraft.csv.gz")
-            .unwrap_or_default();
-        aircrafts
-            .import_aircrafts_metadata(aircraft_csv_gz_path)
-            .unwrap();
-
-        for frame in &frames {
-            aircrafts.feed(frame);
-        }
-
-        let planes: Vec<AircraftTableRow> = aircrafts.iter().map(|a| a.into()).collect();
-        let tab = planes.with_title();
-        assert!(print_stdout(tab).is_ok());
     }
 }
