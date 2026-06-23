@@ -1,9 +1,6 @@
 use anyhow::{Context, Result};
 
-use std::{
-    collections::{BTreeSet, HashMap},
-    io::{Seek, SeekFrom},
-};
+use std::collections::{BTreeSet, HashMap};
 use time::{Duration, UtcDateTime};
 
 use crate::{
@@ -13,11 +10,7 @@ use crate::{
         models::{AircraftEntry, AircraftTableRow},
     },
     feeders::sbs1,
-    utils::{
-        fetch_aircrafts_csv_gz,
-        geo::{CartesianCoord, GeoCoord},
-        sha256_digest,
-    },
+    utils::geo::{CartesianCoord, GeoCoord},
 };
 
 const ALT_RESOLUTION: f64 = 1.0; // altitude resoultion in feet
@@ -25,6 +18,12 @@ const VRATE_RESOLUTION: f64 = 1.0; // vertical rate resolution in feet
 const FEET_PER_METER: f64 = 0.3048;
 const UNKNOWN_AIRCRAFT_STR: &str = "Unknown";
 const PRE_ALLOCATED_CAP: usize = 20;
+
+const VERSION_URL: &str =
+    "https://raw.githubusercontent.com/wiedehopf/tar1090-db/refs/heads/csv/version";
+
+const AIRCRAFT_CSV_GZ_URL: &str =
+    "https://raw.githubusercontent.com/wiedehopf/tar1090-db/refs/heads/csv/aircraft.csv.gz";
 
 #[derive(Debug, Clone)]
 pub struct Aircraft<'p> {
@@ -418,19 +417,36 @@ impl<'a> Aircrafts<'a> {
         }
     }
 
-    fn import_aircrafts_metadata(&mut self, csv_gz_path: &str) -> Result<()> {
+    fn fetch_and_import_aircrafts_metadata(&mut self) -> Result<()> {
         if let Some(db) = self.persistence.as_mut() {
-            let mut agz_file = fetch_aircrafts_csv_gz(csv_gz_path)?;
-            let hash = sha256_digest(&mut agz_file).context("sha256 hasher")?;
+            let cur_ver = {
+                let mut ver = ureq::get(VERSION_URL)
+                    .call()
+                    .context("fail to fetch version")?
+                    .body_mut()
+                    .read_to_string()?;
 
-            let old_hash = db.get_registry_version()?;
-            if hash == old_hash {
+                if ver.contains('\r') {
+                    ver.pop();
+                }
+
+                if ver.contains('\n') {
+                    ver.pop();
+                }
+
+                ver
+            };
+            let prev_ver = db.get_registry_version()?;
+            if cur_ver == prev_ver {
                 return Ok(());
             }
 
-            agz_file.seek(SeekFrom::Start(0))?; // seek it back to the beginning of the file because `sha256_digest` consumed it
-            db.import_metadata_from_gzipped_csv(agz_file, 10000)?;
-            db.insert_registry_version(&hash)?;
+            let mut agz_file = ureq::get(AIRCRAFT_CSV_GZ_URL)
+                .call()
+                .context("fail to fetch aircraft.csv.gz")?
+                .into_body();
+            db.import_metadata_from_gzipped_csv(agz_file.as_reader(), 10000)?;
+            db.insert_registry_version(&cur_ver)?;
 
             Ok(())
         } else {
@@ -504,21 +520,12 @@ impl Drop for Aircrafts<'_> {
 
 pub struct AircraftsBuilder<'b> {
     aircrafts: Aircrafts<'b>,
-    registry_csv_path: String,
 }
 
 impl Default for AircraftsBuilder<'_> {
     fn default() -> Self {
-        let aircraft_csv_gz_path = if cfg!(not(feature = "download_aircrafts_metadata")) {
-            "assets/aircraft.csv.gz".to_string()
-        } else {
-            "https://raw.githubusercontent.com/wiedehopf/tar1090-db/refs/heads/csv/aircraft.csv.gz"
-                .to_string()
-        };
-
         Self {
             aircrafts: Default::default(),
-            registry_csv_path: aircraft_csv_gz_path,
         }
     }
 }
@@ -542,15 +549,6 @@ impl<'p: 'b, 'b> AircraftsBuilder<'b> {
             })
             .ok();
 
-        self
-    }
-
-    pub fn metadata_import_from(mut self, csv_gz_path: &str) -> Self {
-        if csv_gz_path.is_empty() {
-            return self;
-        }
-
-        self.registry_csv_path = csv_gz_path.into();
         self
     }
 
@@ -580,9 +578,11 @@ impl<'p: 'b, 'b> AircraftsBuilder<'b> {
 
     pub fn build(mut self) -> Result<Aircrafts<'b>> {
         if self.aircrafts.persistence.is_some() {
+            let start = std::time::Instant::now();
             self.aircrafts
-                .import_aircrafts_metadata(&self.registry_csv_path)
+                .fetch_and_import_aircrafts_metadata()
                 .context("fail to import metadata")?;
+            println!("imported: took {} seconds", start.elapsed().as_secs_f64());
         }
 
         Ok(self.aircrafts)

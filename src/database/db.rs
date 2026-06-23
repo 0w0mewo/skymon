@@ -68,8 +68,13 @@ impl Database {
     );
 
     CREATE TABLE IF NOT EXISTS "registry_version" (
-        "hash" VARCHAR(64) NOT NULL UNIQUE
+        "id" INTEGER NOT NULL,
+        "hash" VARCHAR(64) NOT NULL UNIQUE,
+        PRIMARY KEY("id")
     );
+    
+    CREATE INDEX IF NOT EXISTS "rv_index_0"
+    ON "registry_version" ("hash");
     "#,
         )?;
 
@@ -266,8 +271,8 @@ impl Database {
 
     pub(crate) fn insert_registry_version(&self, hash: &str) -> QueryResult<()> {
         self.conn.execute(
-            r#"INSERT INTO registry_version (hash) 
-                VALUES (:hash) ON CONFLICT(hash) 
+            r#"INSERT INTO registry_version (id, hash) 
+                VALUES (1, :hash) ON CONFLICT(id) 
                 DO UPDATE SET
                     hash = excluded.hash;"#,
             named_params! {":hash": hash},
