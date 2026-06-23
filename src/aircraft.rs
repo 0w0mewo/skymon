@@ -502,21 +502,40 @@ impl Drop for Aircrafts<'_> {
     }
 }
 
-pub struct AircraftsBuilder<'b>(Aircrafts<'b>);
+pub struct AircraftsBuilder<'b> {
+    aircrafts: Aircrafts<'b>,
+    registry_csv_path: String,
+}
+
+impl Default for AircraftsBuilder<'_> {
+    fn default() -> Self {
+        let aircraft_csv_gz_path = if cfg!(not(feature = "download_aircrafts_metadata")) {
+            "assets/aircraft.csv.gz".to_string()
+        } else {
+            "https://raw.githubusercontent.com/wiedehopf/tar1090-db/refs/heads/csv/aircraft.csv.gz"
+                .to_string()
+        };
+
+        Self {
+            aircrafts: Default::default(),
+            registry_csv_path: aircraft_csv_gz_path,
+        }
+    }
+}
 
 impl<'p: 'b, 'b> AircraftsBuilder<'b> {
     pub fn new() -> Self {
-        Self(Aircrafts::default())
+        Self::default()
     }
 
     pub fn home(mut self, home: &'p GeoCoord) -> Self {
-        self.0.home = home;
+        self.aircrafts.home = home;
 
         self
     }
 
     pub fn persistence(mut self, db_path: &str) -> Self {
-        self.0.persistence = Database::open(db_path)
+        self.aircrafts.persistence = Database::open(db_path)
             .or_else(|err| {
                 eprintln!("fail to open database, skip persistence: {err}");
                 Err(())
@@ -526,41 +545,47 @@ impl<'p: 'b, 'b> AircraftsBuilder<'b> {
         self
     }
 
+    pub fn metadata_import_from(mut self, csv_gz_path: &str) -> Self {
+        if csv_gz_path.is_empty() {
+            return self;
+        }
+
+        self.registry_csv_path = csv_gz_path.into();
+        self
+    }
+
     pub fn persistence_expire_days(mut self, days: u32) -> Self {
-        self.0.persistence_expire_days = if days == 0 { None } else { Some(days) };
+        self.aircrafts.persistence_expire_days = if days == 0 { None } else { Some(days) };
 
         self
     }
 
     pub fn radius(mut self, radius: f64) -> Self {
-        self.0.max_radius = radius;
+        self.aircrafts.max_radius = radius;
 
         self
     }
 
     pub fn altitude(mut self, alt: f64) -> Self {
-        self.0.max_altitude = alt;
+        self.aircrafts.max_altitude = alt;
 
         self
     }
 
     pub fn record_positions(mut self, enable: bool) -> Self {
-        self.0.should_record_positions = enable;
+        self.aircrafts.should_record_positions = enable;
 
         self
     }
 
     pub fn build(mut self) -> Result<Aircrafts<'b>> {
-        if self.0.persistence.is_some() {
-            // TODO: user config
-            let aircraft_csv_gz_path = cfg!(not(feature = "download_aircrafts_metadata"))
-                .then(|| "assets/aircraft.csv.gz")
-                .unwrap_or("https://raw.githubusercontent.com/wiedehopf/tar1090-db/refs/heads/csv/aircraft.csv.gz");
-
-            self.0.import_aircrafts_metadata(aircraft_csv_gz_path).context("fail to import metadata")?;
+        if self.aircrafts.persistence.is_some() {
+            self.aircrafts
+                .import_aircrafts_metadata(&self.registry_csv_path)
+                .context("fail to import metadata")?;
         }
 
-        Ok(self.0)
+        Ok(self.aircrafts)
     }
 }
 
