@@ -79,7 +79,7 @@ fn main() -> Result<()> {
             {
                 Ok(aircrafts) => aircrafts,
                 Err(e) => {
-                    eprintln!("fail to import aircrafts metadata: {e}");
+                    eprintln!("fail to build aircrafts state: {e}");
                     stop_signal.store(true);
                     return;
                 }

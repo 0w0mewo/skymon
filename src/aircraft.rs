@@ -557,7 +557,7 @@ impl<'p: 'b, 'b> AircraftsBuilder<'b> {
                 .then(|| "assets/aircraft.csv.gz")
                 .unwrap_or("https://raw.githubusercontent.com/wiedehopf/tar1090-db/refs/heads/csv/aircraft.csv.gz");
 
-            self.0.import_aircrafts_metadata(aircraft_csv_gz_path)?;
+            self.0.import_aircrafts_metadata(aircraft_csv_gz_path).context("fail to import metadata")?;
         }
 
         Ok(self.0)
