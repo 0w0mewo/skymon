@@ -41,8 +41,8 @@ impl AircraftPositionsTrace {
         self.0.insert(pos.clone());
     }
 
-    pub fn get_trace(&self) -> Vec<&GeoCoord> {
-        self.0.iter().collect()
+    pub fn iter(&self) -> impl Iterator<Item = &GeoCoord> {
+        self.0.iter()
     }
 }
 
@@ -263,10 +263,10 @@ impl<'p: 'a, 'a> Aircraft<'a> {
 
     /// get trace of positions, return `None` if positions recording is disabled,
     /// set `with_traces()` with `true` to enable positions recording
-    pub fn get_trace(&self) -> Option<Vec<&GeoCoord>> {
+    pub fn get_trace(&self) -> Option<impl Iterator<Item = &GeoCoord>> {
         self.trace
             .as_ref()
-            .and_then(|trace| Some(trace.get_trace()))
+            .and_then(|trace| Some(trace.iter()))
     }
 
     pub fn relative_to(&self, reference_location: &GeoCoord) -> Result<CartesianCoord, Error> {
@@ -682,9 +682,9 @@ mod test {
         let air2 = aircrafts.get(0x4010E9).unwrap();
         let air3 = aircrafts.get(0x4CA2CB).unwrap();
 
-        assert_eq!(air1.get_trace().unwrap().len(), 1);
-        assert_eq!(air2.get_trace().unwrap().len(), 2);
-        assert_eq!(air3.get_trace().unwrap().len(), 0);
+        assert_eq!(air1.get_trace().unwrap().count(), 1);
+        assert_eq!(air2.get_trace().unwrap().count(), 2);
+        assert_eq!(air3.get_trace().unwrap().count(), 0);
 
         let air1_loc = air1.get_position();
         let air2_loc = air2.get_position();
