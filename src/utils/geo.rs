@@ -1,5 +1,5 @@
-use std::{fmt::write, ops::Sub};
 use map_3d::{self};
+use std::{fmt::write, hash::Hash, ops::Sub};
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum Error {
@@ -332,6 +332,23 @@ impl PartialEq for GeoCoord {
 }
 
 impl Eq for GeoCoord {}
+
+impl Hash for GeoCoord {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        // derive from 'ordered-float' crate
+        let f64_to_bits = |v: &f64| -> u64 {
+            if v.is_nan() {
+                0x7ff8000000000000 // NaN
+            } else {
+                (v + 0.0).to_bits()
+            }
+        };
+
+        f64_to_bits(&self.lat).hash(state);
+        f64_to_bits(&self.lon).hash(state);
+        f64_to_bits(&self.alt).hash(state);
+    }
+}
 
 #[cfg(test)]
 mod test {

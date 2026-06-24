@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{HashMap, HashSet};
 use time::{Duration, UtcDateTime};
 
 use crate::{
@@ -25,13 +25,34 @@ const VERSION_URL: &str =
 const AIRCRAFT_CSV_GZ_URL: &str =
     "https://raw.githubusercontent.com/wiedehopf/tar1090-db/refs/heads/csv/aircraft.csv.gz";
 
+#[derive(Debug, Clone, Default)]
+struct AircraftPositionsTrace(HashSet<GeoCoord>);
+
+impl AircraftPositionsTrace {
+    pub fn new() -> Self {
+        Self(HashSet::new())
+    }
+
+    pub fn insert(&mut self, pos: &GeoCoord) {
+        if !pos.is_valid() {
+            return;
+        }
+
+        self.0.insert(pos.clone());
+    }
+
+    pub fn get_trace(&self) -> Vec<&GeoCoord> {
+        self.0.iter().collect()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Aircraft<'p> {
     hexident: u64,
     callsign: String,
     position: GeoCoord, // last position
     observer_position: &'p GeoCoord,
-    trace: Option<BTreeSet<GeoCoord>>, // trace of positions
+    trace: Option<AircraftPositionsTrace>, // trace of positions
     track: f64,
     ground_speed: f64,
     vertical_rate: f64,
@@ -156,7 +177,7 @@ impl<'p: 'a, 'a> Aircraft<'a> {
 
     pub fn with_traces(mut self, enable: bool) -> Self {
         if enable {
-            self.trace = Some(BTreeSet::new());
+            self.trace = Some(AircraftPositionsTrace::new());
         }
 
         self
@@ -226,13 +247,9 @@ impl<'p: 'a, 'a> Aircraft<'a> {
         }
 
         // insert current position if it's valid
-        self.trace.as_mut().and_then(|t| {
-            if !self.position.is_valid() {
-                return None;
-            }
-
-            Some(t.insert(self.position.clone()))
-        });
+        if let Some(t) = self.trace.as_mut() {
+            t.insert(&self.position);
+        }
     }
 
     /// get latitude, longtitude and altitude(in meters) of the aircraft
@@ -249,7 +266,7 @@ impl<'p: 'a, 'a> Aircraft<'a> {
     pub fn get_trace(&self) -> Option<Vec<&GeoCoord>> {
         self.trace
             .as_ref()
-            .and_then(|trace| Some(trace.iter().collect()))
+            .and_then(|trace| Some(trace.get_trace()))
     }
 
     pub fn relative_to(&self, reference_location: &GeoCoord) -> Result<CartesianCoord, Error> {
