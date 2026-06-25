@@ -121,30 +121,30 @@ impl TryInto<AircraftEntry> for &Aircraft<'_> {
     }
 }
 
-impl Into<AircraftTableRow> for &Aircraft<'_> {
-    fn into(self) -> AircraftTableRow {
+impl From<&Aircraft<'_>> for AircraftTableRow {
+    fn from(val: &Aircraft<'_>) -> Self {
         AircraftTableRow {
-            hexident: self.hexident,
-            callsign: self.callsign.clone(),
-            position: self.position.clone(),
-            last_seen: self.last_seen,
-            dist: self.dist,
-            reg: self.reg.clone(),
-            short_type: self.short_type.clone(),
+            hexident: val.hexident,
+            callsign: val.callsign.clone(),
+            position: val.position.clone(),
+            last_seen: val.last_seen,
+            dist: val.dist,
+            reg: val.reg.clone(),
+            short_type: val.short_type.clone(),
         }
     }
 }
 
-impl Into<AircraftTableRow> for Aircraft<'_> {
-    fn into(self) -> AircraftTableRow {
+impl From<Aircraft<'_>> for AircraftTableRow {
+    fn from(val: Aircraft<'_>) -> Self {
         AircraftTableRow {
-            hexident: self.hexident,
-            callsign: self.callsign,
-            position: self.position,
-            last_seen: self.last_seen,
-            dist: self.dist,
-            reg: self.reg,
-            short_type: self.short_type,
+            hexident: val.hexident,
+            callsign: val.callsign,
+            position: val.position,
+            last_seen: val.last_seen,
+            dist: val.dist,
+            reg: val.reg,
+            short_type: val.short_type,
         }
     }
 }
@@ -264,9 +264,7 @@ impl<'p: 'a, 'a> Aircraft<'a> {
     /// get trace of positions, return `None` if positions recording is disabled,
     /// set `with_traces()` with `true` to enable positions recording
     pub fn get_trace(&self) -> Option<impl Iterator<Item = &GeoCoord>> {
-        self.trace
-            .as_ref()
-            .and_then(|trace| Some(trace.iter()))
+        self.trace.as_ref().map(|trace| trace.iter())
     }
 
     pub fn relative_to(&self, reference_location: &GeoCoord) -> Result<CartesianCoord, Error> {
@@ -274,7 +272,7 @@ impl<'p: 'a, 'a> Aircraft<'a> {
             return Ok(plane_loc.relative_to(reference_location));
         }
 
-        Err(Error::InvalidInput.into())
+        Err(Error::InvalidInput)
     }
 
     /// distance to the reference point
@@ -374,11 +372,11 @@ impl<'a> Aircrafts<'a> {
             Aircraft::new()
                 .with_hexident(frame.hexident)
                 .with_traces(self.should_record_positions)
-                .with_observer_position(&self.home),
+                .with_observer_position(self.home),
         );
 
         // in-place update the state of the aircraft
-        a.update(&frame);
+        a.update(frame);
 
         // update aircraft registration and type only when it is not set to anything
         // it should fetch and update once from the database record
@@ -400,7 +398,7 @@ impl<'a> Aircrafts<'a> {
     /// home gps coordinate
     pub fn home(&self) -> Option<&GeoCoord> {
         if self.home.is_valid() {
-            Some(&self.home)
+            Some(self.home)
         } else {
             None
         }
@@ -486,7 +484,7 @@ impl<'a> Aircrafts<'a> {
         self.iter().filter(|a| {
             // false if the aircraft location is undefined or out of maximum range
             // Notice it's always true if the location is defined and the maximum distance is less than 0
-            a.get_position().map_or(false, |a_loc| {
+            a.get_position().is_some_and(|a_loc| {
                 let reference_point = &self.home;
                 let (max_distance, max_altitude) = (self.max_radius, self.max_altitude);
 
@@ -535,16 +533,9 @@ impl Drop for Aircrafts<'_> {
     }
 }
 
+#[derive(Default)]
 pub struct AircraftsBuilder<'b> {
     aircrafts: Aircrafts<'b>,
-}
-
-impl Default for AircraftsBuilder<'_> {
-    fn default() -> Self {
-        Self {
-            aircrafts: Default::default(),
-        }
-    }
 }
 
 impl<'p: 'b, 'b> AircraftsBuilder<'b> {
@@ -560,9 +551,8 @@ impl<'p: 'b, 'b> AircraftsBuilder<'b> {
 
     pub fn persistence(mut self, db_path: &str) -> Self {
         self.aircrafts.persistence = Database::open(db_path)
-            .or_else(|err| {
+            .map_err(|err| {
                 eprintln!("fail to open database, skip persistence: {err}");
-                Err(())
             })
             .ok();
 
@@ -640,8 +630,8 @@ mod test {
             .collect();
 
         for frame in &frames {
-            air1.update(&frame);
-            air2.update(&frame);
+            air1.update(frame);
+            air2.update(frame);
         }
 
         assert!(air1.get_trace().is_none());
@@ -849,14 +839,14 @@ mod test {
         // this one shouldn't be deleted
         db.delete_records_older_than(&test_datetime).unwrap();
         let res = db.get_records_by_datetime(&test_datetime, &test_datetime_end);
-        assert!(res.is_ok() || res.unwrap_or_default().len() != 0);
+        assert!(res.is_ok() || !res.unwrap_or_default().is_empty());
 
         // delete by datetime
         // this one should be deleted
         db.delete_records_older_than(&test_datetime_end).unwrap();
 
         let res = db.get_records_by_datetime(&test_datetime, &test_datetime_end);
-        assert!(res.is_err() || res.unwrap_or_default().len() == 0);
+        assert!(res.is_err() || res.unwrap_or_default().is_empty());
 
         assert_eq!(aircrafts.iter().count(), 0);
     }

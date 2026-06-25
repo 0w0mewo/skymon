@@ -35,13 +35,13 @@ impl CartesianCoord {
                     + (y - to_y) * (y - to_y)
                     + (z - to_z) * (z - to_z))
                     .sqrt()),
-                _ => Err(Error::InconsistCoordType.into()),
+                _ => Err(Error::InconsistCoordType),
             },
             CartesianCoord::TwoDimension { x, y } => match to {
                 CartesianCoord::TwoDimension { x: to_x, y: to_y } => {
                     Ok(((x - to_x) * (x - to_x) + (y - to_y) * (y - to_y)).sqrt())
                 }
-                _ => Err(Error::InconsistCoordType.into()),
+                _ => Err(Error::InconsistCoordType),
             },
         }
     }

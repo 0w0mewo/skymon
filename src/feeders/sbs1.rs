@@ -92,7 +92,7 @@ impl Frame {
         }
 
         // we only care about parsing 'MSG' message here
-        if splited[0].to_ascii_uppercase() != "MSG" {
+        if !splited[0].eq_ignore_ascii_case("MSG") {
             return Err(Error::UnknownFrame);
         }
 
@@ -175,10 +175,10 @@ impl TcpFetcher {
             Ok(0) => {
                 if line.is_empty() {
                     // it closes normally
-                    return Err(Error::ConnectionClosed(io::ErrorKind::ConnectionAborted.into()).into());
+                    return Err(Error::ConnectionClosed(io::ErrorKind::ConnectionAborted.into()));
                 } else {
                     // reset by peer because there are still some bytes left without finish processing
-                    return Err(Error::ConnectionClosed(io::ErrorKind::ConnectionReset.into()).into());
+                    return Err(Error::ConnectionClosed(io::ErrorKind::ConnectionReset.into()));
                 }
             }
             // socket is not closed
@@ -189,10 +189,7 @@ impl TcpFetcher {
         };
 
         // try to parse frames
-        match Frame::parse(&line) {
-            Ok(frame) => Ok(frame),
-            Err(e) => Err(e.into()),
-        }
+        Frame::parse(&line)
     }
 }
 
@@ -240,9 +237,9 @@ mod test {
     #[test]
     fn test_frame_parser() {
         let parsed: Vec<Result<Frame, Error>> =
-            TEST_SBS1_FRAMES.iter().map(|f| Frame::parse(f)).collect();
+            TEST_SBS1_FRAMES.iter().map(Frame::parse).collect();
 
         let is_any_errs = parsed.iter().any(|v| v.is_err());
-        assert_eq!(is_any_errs, false);
+        assert!(!is_any_errs);
     }
 }

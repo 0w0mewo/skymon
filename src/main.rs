@@ -64,7 +64,7 @@ fn main() -> Result<()> {
         // processing thread
         let stop_signal = Arc::clone(&should_kill);
         let aircrafts_proc_handle = s.spawn(move |_| {
-            let flush_period = time::Duration::minutes(config.flush_period_mins as i64);
+            let flush_period = time::Duration::minutes(config.flush_period_mins);
             let home_coord = config.home.parse().unwrap_or_default();
             let mut stdout = io::stdout();
             let mut last_flush_time = std_time::Instant::now();
@@ -148,19 +148,16 @@ fn main() -> Result<()> {
                         break;
                     }
 
-                    match aircraft_tabrows_rx.try_recv() {
-                        Ok(mut rows) => {
-                            // clear terminal
-                            _ = stdout.write_all("\x1B[H\x1B[2J\x1B[3J".as_bytes());
-                            _ = stdout.flush();
+                    if let Ok(mut rows) = aircraft_tabrows_rx.try_recv() {
+                        // clear terminal
+                        _ = stdout.write_all("\x1B[H\x1B[2J\x1B[3J".as_bytes());
+                        _ = stdout.flush();
 
-                            rows.sort();
+                        rows.sort();
 
-                            let tab = rows.with_title().display().unwrap().to_string();
-                            _ = stdout.write_all(tab.as_bytes());
-                            _ = stdout.flush();
-                        }
-                        _ => {}
+                        let tab = rows.with_title().display().unwrap().to_string();
+                        _ = stdout.write_all(tab.as_bytes());
+                        _ = stdout.flush();
                     };
 
                     // throttling the refresh rate

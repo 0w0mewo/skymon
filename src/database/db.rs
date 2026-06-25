@@ -98,7 +98,7 @@ impl Database {
                 let (lat, lon) = (row.get(5)?, row.get(6)?);
 
                 Ok(AircraftEntry {
-                    hexident: hexident,
+                    hexident,
                     callsign: row.get(0)?,
                     reg: row.get(1)?,
                     short_type: row.get(2)?,
@@ -129,7 +129,7 @@ impl Database {
 
         let res = stmt.query_one(named_params! {":hexident": hexident}, |row| {
             Ok(AircraftMetadataEntry {
-                hexident: hexident,
+                hexident,
                 reg: row.get(0)?,
                 short_type: row.get(1)?,
                 descr: row.get(2)?,
@@ -263,7 +263,7 @@ impl Database {
 
         // we don't care about Err(QueryReturnedNoRows), it just mean there is not thing imported to the `registry` table
         let res = stmt
-            .query_one([], |row| Ok(row.get(0)?))
+            .query_one([], |row| row.get(0))
             .unwrap_or_default();
 
         Ok(res)

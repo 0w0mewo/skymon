@@ -26,3 +26,9 @@ lto = true
 opt-level = "s"
 strip = true
 debug = false
+
+[profile.dev]
+debug = true
+
+[lints.clippy]
+collapsible-if = "allow"

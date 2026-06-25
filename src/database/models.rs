@@ -52,30 +52,30 @@ impl std::fmt::Display for AircraftEntry {
     }
 }
 
-impl Into<AircraftTableRow> for &AircraftEntry {
-    fn into(self) -> AircraftTableRow {
+impl From<&AircraftEntry> for AircraftTableRow {
+    fn from(val: &AircraftEntry) -> Self {
         AircraftTableRow {
-            hexident: self.hexident,
-            callsign: self.callsign.clone(),
-            position: self.closest_location.clone(),
-            last_seen: self.closest_at,
-            dist: self.closest_dist,
-            reg: self.reg.clone(),
-            short_type: self.short_type.clone(),
+            hexident: val.hexident,
+            callsign: val.callsign.clone(),
+            position: val.closest_location.clone(),
+            last_seen: val.closest_at,
+            dist: val.closest_dist,
+            reg: val.reg.clone(),
+            short_type: val.short_type.clone(),
         }
     }
 }
 
-impl Into<AircraftTableRow> for AircraftEntry {
-    fn into(self) -> AircraftTableRow {
+impl From<AircraftEntry> for AircraftTableRow {
+    fn from(val: AircraftEntry) -> Self {
         AircraftTableRow {
-            hexident: self.hexident,
-            callsign: self.callsign,
-            position: self.closest_location,
-            last_seen: self.closest_at,
-            dist: self.closest_dist,
-            reg: self.reg,
-            short_type: self.short_type,
+            hexident: val.hexident,
+            callsign: val.callsign,
+            position: val.closest_location,
+            last_seen: val.closest_at,
+            dist: val.closest_dist,
+            reg: val.reg,
+            short_type: val.short_type,
         }
     }
 }
