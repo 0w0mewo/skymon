@@ -1,44 +1,40 @@
 use anyhow::Result;
+use clap::Parser;
 
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, Parser)]
+#[command(version, about, long_about=None)]
 pub struct Config {
-    #[serde(default = "Config::default_sbs1_server")]
+    #[arg(long, short='s', default_value_t=Config::default_sbs1_server(), help="SBS1 server")]
     pub sbs1_server: String,
 
-    #[serde(rename(deserialize = "max_dist"), default = "Config::default_max_dist")]
+    #[arg(long="dist", env="MAX_DIST", default_value_t=Config::default_max_dist(), help="Maximum distance of aircrafts that will be logged to database")]
     pub detection_dist: f64,
 
-    #[serde(rename(deserialize = "max_alt"), default = "Config::default_max_alt")]
+    #[arg(long="alt",env="MAX_ALT" ,default_value_t=Config::default_max_alt(), help="Maximum altitude of aircrafts that will be logged to database")]
     pub detection_altitude: f64,
 
-    #[serde(rename(deserialize = "home_coord"), default = "Config::default_home")]
+    #[arg(long, short='H', env="HOME_COORD", default_value_t=Config::default_home(), help="Home GPS coordinate")]
     pub home: String,
 
-    #[serde(
-        rename(deserialize = "sqlite_path"),
-        default = "Config::default_db_path"
-    )]
+    #[arg(long="sqlite-path", short='d', env="SQLITE_PATH", default_value_t=Config::default_db_path(), help="Path to sqlite3 database")]
     pub db_path: String,
 
-    #[serde(default = "Config::default_flush_period_mins")]
+    #[arg(long="flush-period", env="FLUSH_PERIOD" ,default_value_t=Config::default_flush_period_mins(), help="Database flush period in minutes")]
     pub flush_period_mins: i64,
 
-    #[serde(default = "Config::default_slient_mode")]
+    #[arg(long, default_value_t=Config::default_slient_mode(), help="Slient mode")]
     pub slient: bool,
 
-    #[serde(
-        rename(deserialize = "disp_all_aircrafts"),
-        default = "Config::default_display_all_aircrafts"
-    )]
+    #[arg(long, env="DISP_ALL_AIRCRAFTS", default_value_t=Config::default_display_all_aircrafts(), help="Display all aircrafts, otherwise only display the aircrafts within 'dist' and 'alt'")]
     pub disp_all: bool,
 
-    #[serde(default = "Config::minimum_refresh_rate_ms")]
+    #[arg(long, default_value_t=Config::minimum_refresh_rate_ms(), help="Display refresh rate in ms")]
     pub disp_refresh_rate_ms: u64,
 
-    #[serde(rename="posrec_enable", default = "Config::default_should_record_positions")]
+    #[arg(long, default_value_t=Config::default_should_record_positions(), help="")]
     pub enable_position_recording: bool,
 
-    #[serde(default = "Config::default_clean_older_than_days")]
+    #[arg(long, short='D', default_value_t=Config::default_clean_older_than_days(), help="Delete recorded aircrafts older than some days")]
     pub delete_older_than_days: u32,
 }
 
@@ -86,7 +82,7 @@ Enable position recording: {}
 
 impl Config {
     pub fn new() -> Result<Self> {
-        Ok(envy::from_env()?)
+        Ok(Self::try_parse()?)
     }
 
     #[inline]
@@ -161,7 +157,10 @@ mod test {
         assert_eq!(conf.disp_refresh_rate_ms, Config::minimum_refresh_rate_ms());
         assert_eq!(conf.sbs1_server, Config::default_sbs1_server());
         assert_eq!(conf.slient, Config::default_slient_mode());
-        assert_eq!(conf.enable_position_recording, Config::default_should_record_positions());
+        assert_eq!(
+            conf.enable_position_recording,
+            Config::default_should_record_positions()
+        );
         assert_eq!(conf.home, Config::default_home());
         assert!(conf.home.parse::<GeoCoord>().is_ok());
     }

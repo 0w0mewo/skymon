@@ -39,8 +39,11 @@ fn main() -> Result<()> {
         let stop_signal = Arc::clone(&should_kill);
         let feeder_handle = s.spawn(move |_| {
             let timeout = std_time::Duration::from_millis(1000);
-            let socket = net::TcpStream::connect(&config.sbs1_server)
-                .expect("fail to connect to SBS1 server");
+            let Ok(socket)= net::TcpStream::connect(&config.sbs1_server) else {
+                eprintln!("fail to connect to SBS1 server");
+                stop_signal.store(true);
+                return ;
+            };
             _ = socket.set_nodelay(true);
             _ = socket.set_read_timeout(Some(timeout));
 
