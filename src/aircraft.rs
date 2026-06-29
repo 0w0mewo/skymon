@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
+use indexmap::IndexMap;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use time::{Duration, UtcDateTime};
 
 use crate::{
@@ -337,7 +338,7 @@ impl<'p: 'a, 'a> Aircraft<'a> {
 }
 
 pub struct Aircrafts<'a> {
-    state: HashMap<u64, Aircraft<'a>>, // current state
+    state: IndexMap<u64, Aircraft<'a>>, // current state
     home: &'a GeoCoord,
     persistence: Option<Database>,
     persistence_expire_days: Option<u32>,
@@ -349,7 +350,7 @@ pub struct Aircrafts<'a> {
 impl Default for Aircrafts<'_> {
     fn default() -> Self {
         Self {
-            state: HashMap::with_capacity(PRE_ALLOCATED_CAP),
+            state: IndexMap::with_capacity(PRE_ALLOCATED_CAP),
             home: Default::default(),
             max_radius: -1.0,
             max_altitude: -1.0,
